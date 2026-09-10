@@ -1,0 +1,25 @@
+# Pinned for reproducibility
+# Tested on Python 3.11.9 (Windows, Linux, macOS)
+
+# Core
+numpy==1.26.4
+scipy==1.13.0
+pandas==2.2.2
+scikit-learn==1.5.0
+
+# Deep learning (CUDA 12.x build)
+torch==2.3.0
+
+# I/O
+anndata==0.10.7
+h5py==3.11.0
+pyarrow==16.0.0
+
+# Visualization
+matplotlib==3.9.0
+seaborn==0.13.2
+
+# Utilities
+tqdm==4.66.4
+pyyaml==6.0.1
+joblib==1.4.2

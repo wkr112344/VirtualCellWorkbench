@@ -1,0 +1,36 @@
+# Configuration for the E1 baseline (paper §3.2 reference architecture).
+
+model:
+  name: E1Model
+  d_in_drug: 2048        # ECFP4 fingerprint dimension
+  n_cells: 162           # paper's 162-cell vocabulary
+  d_hidden: 1024
+  n_genes: 12328
+  cell_emb_dim: 32
+
+data:
+  cache_dir: data/g2cp_cache_beta_all
+  chem_only: true        # use kind == 1 (chemical perturbations) only
+  split:
+    protocol: official_10pct_pert
+    seed: 0
+    heldout_frac: 0.10
+
+training:
+  epochs: 30
+  batch_size: 128
+  optimizer: AdamW
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  scheduler: cosine
+  loss: mse_plus_one_minus_pcc
+  early_stopping:
+    patience: 5
+    metric: val_pcc
+
+eval:
+  bootstrap:
+    n_boot: 200
+    cluster_by: drug
+    seed: 0
+  ci_level: 0.95

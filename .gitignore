@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data (large files; download separately or via Zenodo)
+/data/
+/checkpoints/
+/results/raw/
+*.npy
+*.npz
+*.h5
+*.h5ad
+*.pkl
+*.parquet
+!docs/**/*.pkl
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# OS
+Thumbs.db

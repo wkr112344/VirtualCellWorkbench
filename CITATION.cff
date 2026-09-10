@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "VirtualCellWorkbench"
+version: 0.1.0
+date-released: 2026-09-10
+license: MIT
+authors:
+  - family-names: Wei
+    given-names: Kairui
+    orcid: 0000-0000-0000-0000
+keywords:
+  - bioinformatics
+  - drug-response-prediction
+  - l1000
+  - cell-line-heterogeneity
+  - geometric-deep-learning
+references:
+  - type: article
+    title: "Cancer Cell Line Heterogeneity Imposes a Primary Bottleneck for Virtual Perturbation Screening at Scale"
+    authors:
+      - family-names: Wei
+        given-names: Kairui
+    journal: "bioRxiv"
+    year: 2026
+    doi: 10.64898/2026.08.10.743942
