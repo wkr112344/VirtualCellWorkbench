@@ -2,12 +2,14 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "VirtualCellWorkbench"
-version: 0.1.0
+version: 0.1.1
 date-released: 2026-09-10
 license: MIT
+doi: 10.5281/zenodo.22694467
 authors:
   - family-names: Wei
     given-names: Kairui
+    affiliation: Xinjiang Medical University
     orcid: 0000-0000-0000-0000
 keywords:
   - bioinformatics
@@ -15,6 +17,10 @@ keywords:
   - l1000
   - cell-line-heterogeneity
   - geometric-deep-learning
+  - LINCS-L1000
+  - ECFP4
+  - virtual-cell
+  - perturbation-response-prediction
 references:
   - type: article
     title: "Cancer Cell Line Heterogeneity Imposes a Primary Bottleneck for Virtual Perturbation Screening at Scale"

@@ -1,7 +1,19 @@
 # VirtualCellWorkbench
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22694467.svg)](https://doi.org/10.5281/zenodo.22694467)
+[![GitHub release](https://img.shields.io/badge/release-v0.1.0-blue)](https://github.com/wkr112344/VirtualCellWorkbench/releases/tag/v0.1.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 > A PyTorch toolkit for predicting chemical-perturbation transcriptional responses across cancer and normal cell lines.
-> Companion code for Wei (2026), *Cancer Cell Line Heterogeneity Imposes a Primary Bottleneck* (DOI: 10.64898/2026.08.10.743942).
+> Companion code for Wei (2026), *Cancer Cell Line Heterogeneity Imposes a Primary Bottleneck* (DOI: [10.64898/2026.08.10.743942](https://www.biorxiv.org/content/10.64898/2026.08.10.743942v1)).
+
+## Citing
+
+If you use VirtualCellWorkbench in your research, please cite both the **preprint** and the **software**:
+
+> Wei, K. (2026). *VirtualCellWorkbench v0.1.0* (Version 0.1.0). Zenodo. https://doi.org/10.5281/zenodo.22694467
+
+> Wei, K. (2026). Cancer Cell Line Heterogeneity Imposes a Primary Bottleneck for Virtual Perturbation Screening at Scale. *bioRxiv*. https://doi.org/10.64898/2026.08.10.743942
 
 ## 1-line install
 
