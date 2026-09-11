@@ -1,5 +1,12 @@
 # VirtualCellWorkbench: A unified toolkit for benchmarking cell-line-specific perturbation response prediction at scale
 
+<!--
+STATUS: DRAFT — pending Chinese review by 卫铠睿 / 詹李靖 / 祁灿阳 before JOSS submission.
+DO NOT CITE. DO NOT TAG AS RELEASE. NO Zenodo archive for this draft.
+Chinese review copy: paper_zh.docx in dist_for_wechat/.
+Review checklist: docs/JOSS_REVIEW_CHECKLIST.md
+-->
+
 ## Authors
 
 - Kairui Wei (corresponding) — Xinjiang Medical University, Ürümqi, China. ORCID: 0000-0000-0000-0000
