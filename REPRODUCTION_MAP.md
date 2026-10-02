@@ -1,21 +1,22 @@
-# 结论 → 脚本 → 输入 → 期望输出
+# Conclusion → script → input → expected output
 
-| 论文结论 | 脚本 | 输入 | 期望输出（校验值） |
+| Paper conclusion | Script | Input | Expected output (checksum value) |
 |---|---|---|---|
-| LINCS 主 Δ 0.2956（95% CI 0.2918–0.2993） | `github/analysis/stability_checks/_audit_numbers.py` 或 as-supplied | `zenodo/source_data/frozen_prediction_matrices/frozen_perrow_three_metrics.csv` | S1 表同值 |
-| 三种指标跨矩阵同向 | 同上 | 同上 | S1 表（Pearson/Spearman/余弦 × 药物/细胞系） |
-| 训练状态反转 Dβ=+0.1975、Ddcic=−0.0810、I=0.2785 | `_patch_A_B.py` | `supplementary/frozen_multimetric_perrow_scores.csv` | 表 3、S20 |
-| crossed 2×2 反转保持 2000/2000 | `_patch_A_B.py` | 同上 | S20（direction_probability=1.0） |
-| 主 Δ 的 crossed 区间 0.2855–0.3128 | `_crossed_bootstrap_and_disease.py` | frozen per-row 分数 | S18 |
-| 排名 Spearman 0.5675 / Kendall τ 0.4110 | `_audit_numbers.py` + `_within_ref_stability.py` | per-drug 排名 | S21 |
-| top-10 跨矩阵 3/10；同参考 7.93 / 7.04 | `_within_ref_stability.py`、`_patch_A_B.py` | per-row 分数（B=2000 独立 pair） | S17、S17b、S17c |
-| top-k 与随机期望 | `_audit_numbers.py` | 药物数 2,037 | S22 |
-| 疾病榜单边界 0.14%–10.85%、带 11–13 | `_crossed_bootstrap_and_disease.py` | `图源数据/TableS_disease_perdrug_scored.csv` | S19 |
-| DepMap 交互 0.05632 → −0.00047 | `as_supplied/depmap_background_control.py` | `source_data/depmap_analysis_ready_*` | 表 4、S6 |
-| 基因均值基线 ≈0.90–0.94 | 同上 | 同上 | S4 |
-| 阳性对照 0.2164 / 0.2771 / 0.1233 / 0.1621 | `positive_control_expression_ridge.py` | `depmap_positive_control`（+ 见 DATA_SOURCES 的 X_TPM 重建） | S13–S15 |
-| DepMap 272 细胞一致性 0.9431/0.9467 与预测均值 0.8595/0.8226 | `_recompute_depmap272.py` | `图源数据/DepMap_{CERES,Chronos}_272x1244.csv` + `DeepDEP_predictor_strict.csv` | S16 |
-| GTEx 交互 0.07096 / 0.06187（中位数的中位数） | `gtex_reference_sensitivity/scripts/07_bootstrap.py` | `gtex_reference_sensitivity`（逐样本得分） | S8、S10–S12 |
-| 图 1–6 与单面板 | `github/analysis/figure_build/*.py` | `zenodo/source_data/图源数据` | `zenodo/figures/` 同名文件 |
+| LINCS main Δ 0.2956 (95% CI 0.2918–0.2993) | `github/analysis/stability_checks/_audit_numbers.py` or as-supplied | `zenodo/source_data/frozen_prediction_matrices/frozen_perrow_three_metrics.csv` | same value as Table S1 |
+| The three metrics agree in direction across matrices | same as above | same as above | Table S1 (Pearson/Spearman/cosine × drug/cell line) |
+| Training-state reversal D_beta = +0.1975, D_dcic = −0.0810, I = 0.2785 | `_patch_A_B.py` | `supplementary/frozen_multimetric_perrow_scores.csv` | Table 3, S20 |
+| Crossed 2×2 reversal holds 2000/2000 | `_patch_A_B.py` | same | S20 (direction_probability = 1.0) |
+| Crossed CI for the main Δ, 0.2855–0.3128 | `_crossed_bootstrap_and_disease.py` | frozen per-row scores | S18 |
+| Rank Spearman 0.5675 / Kendall τ 0.4110 | `_audit_numbers.py` + `_within_ref_stability.py` | per-drug ranks | S21 |
+| top-10 across matrices 3/10; same-reference 7.93 / 7.04 | `_within_ref_stability.py`, `_patch_A_B.py` | per-row scores (B = 2000 independent pairs) | S17, S17b, S17c |
+| top-k vs random expectation | `_audit_numbers.py` | n_drugs = 2,037 | S22 |
+| Disease shortlist boundary 0.14%–10.85%, band 11–13 | `_crossed_bootstrap_and_disease.py` | `figure_source_data/TableS_disease_perdrug_scored.csv` | S19 |
+| DepMap interaction 0.05632 → −0.00047 | `as_supplied/depmap_background_control.py` | `source_data/depmap_analysis_ready_*` | Table 4, S6 |
+| Gene-mean baseline ≈ 0.90–0.94 | same | same | S4 |
+| Positive control 0.2164 / 0.2771 / 0.1233 / 0.1621 | `positive_control_expression_ridge.py` | `depmap_positive_control` (+ see DATA_SOURCES for the X_TPM rebuild) | S13–S15 |
+| DepMap 272-cell consistency 0.9431/0.9467 and prediction means 0.8595/0.8226 | `_recompute_depmap272.py` | `figure_source_data/DepMap_{CERES,Chronos}_272x1244.csv` + `DeepDEP_predictor_strict.csv` | S16 |
+| GTEx interaction 0.07096 / 0.06187 (median of medians) | `gtex_reference_sensitivity/scripts/07_bootstrap.py` | `gtex_reference_sensitivity` (per-sample scores) | S8, S10–S12 |
+| Figures 1–6 and single panels | `github/analysis/figure_build/*.py` | `zenodo/source_data/figure_source_data` | same-named files in `zenodo/figures/` |
 
-> 校验口径：所有关键数字容差 5×10⁻⁴；区间端点 1×10⁻³。逐一比对脚本见 `EXPECTED_OUTPUTS.json` 与 `github/analysis/stability_checks/_audit_numbers.py`。
+> Checking convention: all key numbers use tolerance 5×10⁻⁴; interval endpoints 1×10⁻³. The one-by-one comparison
+> script is `github/analysis/stability_checks/_audit_numbers.py`, driven by `EXPECTED_OUTPUTS.json`.

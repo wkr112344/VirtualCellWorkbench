@@ -1,10 +1,10 @@
 """CD_consolidate_from_prior.py
-把既有管线已算出的 C / D 两件套（G2CP 受控参考互换）整理成 experiments/results/ 下的
-干净交付物，并标注来源（非本次从零重训，而是既有 controlled_swap / r94 产物）。
-- D = G2CP 受控"参考互换"2×2：同一 β-trained 模型(g2cp_v7_beta_ft.pt) 分别对
-      A=level5beta2020(cache_beta_v2) 与 B=dcic2021(cache_2021) 评分。
-- C = 上述同一设计的逐药稳定性（2037 个留出药物）。
-两件套共用同一 P* / C*=64系 / D*=20370药 / H=2037药 / 11275 对。基因轴=978 landmark。
+Consolidate the C / D pair already computed by the existing pipeline (G2CP controlled reference swap) into
+clean deliverables under experiments/results/, noting their origin (existing controlled_swap / r94 outputs, not retrained here).
+- D = G2CP controlled "reference swap" 2x2: the same beta-trained model (g2cp_v7_beta_ft.pt) scored against
+      A=level5beta2020 (cache_beta_v2) and B=dcic2021 (cache_2021) respectively.
+- C = per-drug stability for the same design (2,037 held-out drugs).
+The pair shares the same P* / C*=64 cell lines / D*=20,370 drugs / H=2,037 drugs / 11,275 pairs. Gene axis = 978 landmarks.
 """
 import json, csv, os
 BASE = r'C:/Users/wkr20/WorkBuddy/2026-09-06-00-53-37'
@@ -40,7 +40,7 @@ with open(f'{RES}/D_g2cp_refswap_2x2.csv', 'w', newline='', encoding='utf-8-sig'
     w.writerow(['design.eval_pairs', des.get('eval_pairs'), '', '', '', '', '', '', '', ''])
     w.writerow(['design.ckpt', des.get('ckpt'), '', '', '', '', '', '', '', ''])
     w.writerow(['gene_axis', '978 landmark', '', '', '', '', '', '', '', ''])
-# D 摘要
+# D summary
 dsum = {
     'experiment': 'D_g2cp_controlled_source_swap_2x2',
     'model_ckpt': des.get('ckpt'),

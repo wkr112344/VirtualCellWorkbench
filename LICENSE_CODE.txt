@@ -1,2 +1,3 @@
-【待作者确认】代码许可建议：MIT 或 Apache-2.0。
-选定后请把完整许可文本写入本文件，并在 GitHub 仓库根目录放同名 LICENSE。
+[TO BE CONFIRMED BY THE AUTHORS] Suggested code license: MIT or Apache-2.0.
+Once chosen, replace this file with the full license text and add a file named
+LICENSE with the same content at the root of the GitHub repository.

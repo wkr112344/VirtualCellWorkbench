@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-S_drugsplit_metrics_ci.py —— 补出「药物轴(drug-split) cohort」的 Spearman / cosine CI
+S_drugsplit_metrics_ci.py -- fill in the Spearman / cosine CIs for the "drug-split cohorts"
 
-背景：P_frozen_multimetric_cohorts.py 跑的时候，药物轴 cohort 对**三口径都算过** bootstrap CI，
-但写 frozen_cohort_replication.csv 时只落了 pearson 的 lo/hi；big_experiment 合并时
-spearman/cosine 的 CI 被填成 0/None。本脚本把这些已算出的 CI 全部补齐，不重训、不重抽样。
+Background: when P_frozen_multimetric_cohorts.py ran, the drug-axis cohorts had bootstrap CIs computed for **all three calibers**,
+but only the pearson lo/hi were written into frozen_cohort_replication.csv; when big_experiment merged them,
+the spearman/cosine CIs were filled with 0/None. This script fills all these already-computed CIs back in, without retraining or resampling.
 
-产出：
-  results/frozen_cohort_replication.csv            宽表，补 lo/hi/显著性（三口径）
-  results/frozen_drugsplit_cohort_three_metrics.csv 长表（K × cohort × metric）
-  results/big_experiment_independent_cohorts.csv   药物轴行改为真实 CI
-  results/big_experiment_independent_cohorts.json 加 drug_axis_three_metrics 一致性
+Deliverables:
+  results/frozen_cohort_replication.csv            wide table, filling lo/hi/significance (three calibers)
+  results/frozen_drugsplit_cohort_three_metrics.csv long table (K x cohort x metric)
+  results/big_experiment_independent_cohorts.csv   drug-axis rows changed to real CIs
+  results/big_experiment_independent_cohorts.json adds drug_axis_three_metrics consistency
 """
 import csv
 import io
@@ -32,7 +32,7 @@ with open(os.path.join(RES, "frozen_multimetric_summary.json"), encoding="utf-8"
     J = json.load(f)
 CR = J["cohort_replication"]
 
-# ───────────────────────── 1. 宽表：补三口径 lo/hi ─────────────────────────
+# ------------------------- 1. wide table: fill three-caliber lo/hi -------------------------
 wide = []
 for Kk, rec in CR.items():
     K = int(Kk[1:])
@@ -48,9 +48,9 @@ for Kk, rec in CR.items():
 with open(os.path.join(RES, "frozen_cohort_replication.csv"), "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=list(wide[0].keys()))
     w.writeheader(); w.writerows(wide)
-log("[written] frozen_cohort_replication.csv  (宽表, 三口径含 CI)  rows=%d" % len(wide))
+log("[written] frozen_cohort_replication.csv  (wide, three calibers with CI)  rows=%d" % len(wide))
 
-# ───────────────────────── 2. 长表 ─────────────────────────
+# ------------------------- 2. long table -------------------------
 longr = []
 for r in wide:
     for m in METRICS:
@@ -62,9 +62,9 @@ for r in wide:
 with open(os.path.join(RES, "frozen_drugsplit_cohort_three_metrics.csv"), "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=list(longr[0].keys()))
     w.writeheader(); w.writerows(longr)
-log("[written] frozen_drugsplit_cohort_three_metrics.csv (长表)  rows=%d" % len(longr))
+log("[written] frozen_drugsplit_cohort_three_metrics.csv (long)  rows=%d" % len(longr))
 
-# ───────────────────── 3. 药物轴逐口径一致性 ─────────────────────
+# --------------------- 3. per-caliber consistency of the drug axis ---------------------
 drug_axis_metrics = {}
 for Kk, rec in CR.items():
     K = int(Kk[1:])
@@ -89,7 +89,7 @@ for Kk, rec in CR.items():
                   "pooled": round(pooled, 6), "Q": round(Q, 4), "I2_pct": round(I2, 2)}
     drug_axis_metrics["K%d" % K] = per
 
-# ───────────────────── 4. 修正 big_experiment CSV 的药物轴行 ─────────────────────
+# --------------------- 4. fix the drug-axis rows of the big_experiment CSV ---------------------
 p_big = os.path.join(RES, "big_experiment_independent_cohorts.csv")
 with open(p_big, encoding="utf-8") as f:
     rows = list(csv.DictReader(f))
@@ -108,16 +108,16 @@ with open(p_big, "w", newline="", encoding="utf-8") as f:
             "estimate", "ci95_low", "ci95_high", "excludes_zero", "estimand"]
     w = csv.DictWriter(f, fieldnames=keys, extrasaction="ignore")
     w.writeheader(); w.writerows(rows)
-log("[fixed] big_experiment_independent_cohorts.csv  药物轴行 %d 行改为真实 CI" % fixed)
+log("[fixed] big_experiment_independent_cohorts.csv  %d drug-axis rows changed to real CIs" % fixed)
 
-# ───────────────────── 5. 更新 big JSON ─────────────────────
+# --------------------- 5. update the big JSON ---------------------
 with open(os.path.join(RES, "big_experiment_independent_cohorts.json"), encoding="utf-8") as f:
     B = json.load(f)
 B["drug_axis_three_metrics"] = drug_axis_metrics
 B.pop("lincs_note_drug_axis_only_pearson_ci", None)
-B["notes"] = ("药物轴(2037 留出药切互不相交 cohort)的 Pearson/Spearman/cosine 三口径 CI 均已补出；"
-              "见 frozen_drugsplit_cohort_three_metrics.csv 与 frozen_cohort_replication.csv。")
-# 重算 by_view 的 ALL（pearson 口径不受影响，但 excludes_zero 现在更完整）
+B["notes"] = ("The Pearson/Spearman/cosine CIs for the drug axis (2,037 held-out drugs split into disjoint cohorts) are all filled in;"
+              "see frozen_drugsplit_cohort_three_metrics.csv and frozen_cohort_replication.csv.")
+# recompute by_view ALL (the pearson caliber is unaffected, but excludes_zero is now more complete)
 pear = [r for r in rows if r["metric"] == "pearson"]
 seen, one = set(), []
 for r in pear:
@@ -146,11 +146,11 @@ json.dump(B, io.open(os.path.join(RES, "big_experiment_independent_cohorts.json"
           ensure_ascii=False, indent=1)
 log("[written] big_experiment_independent_cohorts.json + drug_axis_three_metrics")
 
-log("\n药物轴三口径汇总（每 cohort 独立估计 + 药物聚类 bootstrap 2000, seed 12345）")
+log("\ndrug-axis three-caliber summary (independent per cohort + drug-cluster bootstrap 2000, seed 12345)")
 for Kk, per in drug_axis_metrics.items():
     log("  %s:" % Kk)
     for m in METRICS:
         d = per[m]
-        log("    %-9s median=%+.4f range=[%+.4f,%+.4f] 同号=%s CI全不跨0=%s(%d/%d) pooled=%+.4f I²=%.1f%%"
+        log("    %-9s median=%+.4f range=[%+.4f,%+.4f] same-sign=%s allCIsExclude0=%s(%d/%d) pooled=%+.4f I2=%.1f%%"
             % (m, d["median"], d["range"][0], d["range"][1], d["all_same_sign"],
                d["all_ci_exclude_zero"], d["n_ci_exclude_zero"], d["n_cohorts"], d["pooled"], d["I2_pct"]))

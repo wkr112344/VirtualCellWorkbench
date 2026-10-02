@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Dose-tolerance sensitivity for PRnet 2x2: at what relative dose tolerance does
 h5ad (beta2020) perturbation keys match dcic2021 signatures? Informs whether a
-tolerant hard-swap is defensible (the user's 'dose/time 定义不一致不能硬替换')."""
+tolerant hard-swap is defensible (the note 'inconsistent dose/time definitions cannot be hard-swapped')."""
 import h5py, numpy as np, scanpy as sc, re, json, os
 from collections import defaultdict
 

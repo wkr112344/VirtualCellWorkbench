@@ -1,11 +1,11 @@
-# 04 donor 级切分（seed 锁定） -> metadata/splits.json
+# 04 Donor-level split (seed locked) -> metadata/splits.json
 import os, sys, json
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import load_config, log, p
 
 cfg = load_config()
-assert cfg["analysis"]["split_unit"] == "donor", "切分单元必须是 donor"
+assert cfg["analysis"]["split_unit"] == "donor", "the split unit must be donor"
 
 d = json.load(open(p("metadata", "donors.json")))
 donors = np.array(d["donors"])
@@ -22,5 +22,5 @@ te_s = [s for s in tmap if tmap[s]["donor"] in set(test)]
 out = {"seed": cfg["analysis"]["seed"], "train_donors": train, "test_donors": test,
        "train_samples": tr_s, "test_samples": te_s}
 json.dump(out, open(p("metadata", "splits.json"), "w"), indent=1)
-log("donor %d = train %d + test %d；样本 train %d / test %d -> metadata/splits.json"
+log("donors %d = train %d + test %d; samples train %d / test %d -> metadata/splits.json"
     % (len(donors), len(train), len(test), len(tr_s), len(te_s)))

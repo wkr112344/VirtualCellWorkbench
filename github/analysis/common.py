@@ -1,4 +1,4 @@
-# 共享工具：配置加载、donor 解析、日志
+# Shared utilities: config loading, donor parsing, logging
 import os, time, yaml
 import numpy as np
 
@@ -20,9 +20,9 @@ def p(*parts) -> str:
 
 
 def iter_numeric_csv_chunks(path, id_cols, block_size=1 << 29):
-    """pyarrow CSV 流式解析（多线程解析 + arrow 原生 float32 cast + 零拷贝取列）。
+    """Streaming pyarrow CSV parsing (multithreaded parse + native float32 cast + zero-copy column access).
     yield (gid_np_str, vals_float32(nrows×ncols), sample_names|None)。
-    id_cols: 前几个 ID 列名；gid 取第 2 个（GCT 用 Name，RSEM 用 gene_id）。"""
+    id_cols: the leading ID column names; gid is the 2nd one (GCT uses Name, RSEM uses gene_id)."""
     import pyarrow as pa
     import pyarrow.csv as pac
     ro = pac.ReadOptions(block_size=block_size)
@@ -31,7 +31,7 @@ def iter_numeric_csv_chunks(path, id_cols, block_size=1 << 29):
         names = reader.schema.names
         assert names[:len(id_cols)] == list(id_cols), names[:4]
         sample_names = names[len(id_cols):]
-        # 只把数值列 cast 成 float32；ID 列保持 string
+        # cast only the numeric columns to float32; keep ID columns as string
         target = pa.schema([(nm, pa.string() if nm in id_cols else pa.float32())
                             for nm in names])
         for batch in reader:
@@ -40,16 +40,16 @@ def iter_numeric_csv_chunks(path, id_cols, block_size=1 << 29):
             cols = [tbl.column(i).combine_chunks() for i in range(len(id_cols), len(names))]
             try:
                 arrs = [c.to_numpy(zero_copy_only=True) for c in cols]
-            except pa.ArrowInvalid:          # 有 null 时退回拷贝
+            except pa.ArrowInvalid:          # fall back to a copy when nulls are present
                 arrs = [c.to_numpy(zero_copy_only=False) for c in cols]
             vals = np.stack(arrs, axis=1)
             yield gid, vals, sample_names
 
 
 def iter_tsv_gz_blocks(path, skip_lines=1, n_id_cols=2, id_index=1, block_comp=64 << 20):
-    """zlib 流式解压 + 分块 np.loadtxt 解析（numpy 2.x 的 C 实现，~73MB/s，无逐列开销）。
+    """Streaming zlib decompression + chunked np.loadtxt parsing (numpy 2.x C implementation, ~73 MB/s, no per-column overhead).
     yield (ids:list[str], vals:float32(nrows×ncols))。
-    skip_lines: 跳过文件头行数；n_id_cols: 前 n 个 ID 列；id_index: 用第几个 ID 列做 ids。"""
+    skip_lines: number of header lines to skip; n_id_cols: number of leading ID columns; id_index: which ID column to use as ids."""
     import io
     import zlib
     d = zlib.decompressobj(16 + zlib.MAX_WBITS)
@@ -60,7 +60,7 @@ def iter_tsv_gz_blocks(path, skip_lines=1, n_id_cols=2, id_index=1, block_comp=6
         b = f.read(block_comp)
         buf += d.decompress(b).decode("utf-8", "replace") if b else d.flush().decode("utf-8", "replace")
         lines = buf.split("\n")
-        buf = lines.pop()                      # 块尾半行留到下一轮
+        buf = lines.pop()                      # keep the trailing partial line for the next round
         proc = []
         for l in lines:
             if skip > 0:

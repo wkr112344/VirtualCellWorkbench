@@ -1,16 +1,16 @@
 """E_extract_max_tanimoto.py  (E2)
-用 data/g2cp_cache_beta_v2/drug_fps.npy (32039 x 2048 连续指纹) 重算每个测试药物的
-max Tanimoto-to-train，再与 TableS22 的逐药 beta(2020)-dcic(2021) delta 结合，
-做 Tanimoto 阈值敏感性分析（E 的"连续分层"部分）。
+Using data/g2cp_cache_beta_v2/drug_fps.npy (32039 x 2048 continuous fingerprints), recompute each test drug's
+max Tanimoto-to-train, then combine with the per-drug beta(2020)-dcic(2021) delta from TableS22
+to run a Tanimoto threshold sensitivity analysis (the "continuous stratification" part of E).
 
-对齐：drug_fps 行序 = meta.npz drug_vocab；TableS22.drug 命中小写/原样匹配 drug_vocab。
-Tanimoto（连续指纹）= (A·B) / (||A||^2 + ||B||^2 - A·B)。
+Alignment: drug_fps row order = meta.npz drug_vocab; TableS22.drug matches drug_vocab case-insensitively / literally.
+Tanimoto (continuous fingerprints) = (A.B) / (||A||^2 + ||B||^2 - A.B).
 """
 import csv, os, json
 import numpy as np
 
 WS = 'C:/Users/wkr20/WorkBuddy/2026-09-06-00-53-37'
-PKG = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/补充材料'
+PKG = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/supplementary'
 RES = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/results'
 os.makedirs(RES, exist_ok=True)
 
@@ -19,8 +19,8 @@ meta = np.load(f'{WS}/data/g2cp_cache_beta_v2/meta.npz', allow_pickle=True)
 vocab = list(meta['drug_vocab']); vocab_idx = {d: i for i, d in enumerate(vocab)}
 norms2 = np.sum(fps * fps, axis=1)                                    # (32039,)
 
-# TableS22 逐药 delta
-t22 = list(csv.DictReader(open(f'{PKG}/TableS22_严格双侧未见_逐药.csv', encoding='utf-8-sig')))
+# per-drug delta from TableS22
+t22 = list(csv.DictReader(open(f'{PKG}/TableS22_strict_two_sided_absent_per_drug.csv', encoding='utf-8-sig')))
 rows_out = []
 for r in t22:
     drug = r['drug']
@@ -31,7 +31,7 @@ for r in t22:
     dots = fps @ fp
     denom = norms2 + norms2[i] - dots
     T = dots / np.where(denom > 0, denom, 1e-12)
-    T[i] = -1.0  # 排除自身
+    T[i] = -1.0  # exclude self
     maxT = float(T.max())
     try:
         dA = float(r['pcc_A_beta2020_978']); dB = float(r['pcc_B_dcic2021_978'])
@@ -46,7 +46,7 @@ with open(f'{RES}/E_perdrug_max_tanimoto.csv', 'w', newline='', encoding='utf-8-
     w.writeheader(); w.writerows(rows_out)
 print('wrote E_perdrug_max_tanimoto.csv  n=', len(rows_out))
 
-# 阈值敏感性
+# threshold sensitivity
 thresholds = [1.00, 0.95, 0.90, 0.85, 0.80, 0.70, 0.60]
 arr = np.array([[r['max_tanimoto_to_train'], r['delta_pcc_beta_minus_dcic']] for r in rows_out])
 mt, dl = arr[:, 0], arr[:, 1]

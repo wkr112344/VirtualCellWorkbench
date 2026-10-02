@@ -1,4 +1,4 @@
-# 01 样本/注释 join 检查：donor 解析、组织标签、覆盖检查 -> metadata/sample_tissue_map.json, donors.json
+# 01 Sample/annotation join check: donor parsing, tissue labels, coverage -> metadata/sample_tissue_map.json, donors.json
 import os, sys, csv, json, collections
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import load_config, log, donor_id, p
@@ -7,22 +7,22 @@ cfg = load_config()
 lab = cfg["analysis"]["tissue_label"]
 
 samples = [l.strip() for l in open(cfg["paths"]["sample_ids_txt"], encoding="utf-8") if l.strip()]
-log("表达矩阵样本 %d 个" % len(samples))
+log("%d samples in the expression matrix" % len(samples))
 assert len(samples) == cfg["expected"]["gct_cols"]
 
 with open(cfg["paths"]["sample_attributes"], encoding="utf-8-sig") as f:
     ann = {r["SAMPID"]: {"SMTS": r.get("SMTS", ""), lab: r.get(lab, "")} for r in csv.DictReader(f, delimiter="\t")}
-log("注释表 %d 个 SAMPID" % len(ann))
+log("%d SAMPIDs in the annotation table" % len(ann))
 
 missing = [s for s in samples if s not in ann]
-log("表达样本未命中注释: %d" % len(missing))
-assert not missing, "存在对不上注释的样本: %s" % missing[:5]
+log("expression samples with no annotation match: %d" % len(missing))
+assert not missing, "samples with no matching annotation: %s" % missing[:5]
 
 tmap = {s: {"donor": donor_id(s), "SMTS": ann[s]["SMTS"], lab: ann[s][lab]} for s in samples}
 donors = sorted({v["donor"] for v in tmap.values()})
 tcnt = collections.Counter(v[lab] for v in tmap.values())
 dcnt = collections.Counter(v["donor"] for v in tmap.values())
-log("donor %d 个（人均 %.1f 样本）；%s %d 类" % (len(donors), len(samples)/len(donors), lab, len(tcnt)))
+log("%d donors (%.1f samples each on average); %s has %d classes" % (len(donors), len(samples)/len(donors), lab, len(tcnt)))
 
 json.dump(tmap, open(p("metadata", "sample_tissue_map.json"), "w", encoding="utf-8"), indent=1)
 json.dump({"donors": donors, "n_samples": len(samples), "tissue_label": lab,

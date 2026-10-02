@@ -1,20 +1,20 @@
 """
 B_extract_sevenmodel_beta_dcic_boot.py
 
-从 220_dpb_crossversion.json 提取七模型 beta2020 vs dcic2021 的对比统计量。
+Extract the beta2020 vs dcic2021 comparison statistics for the seven models from 220_dpb_crossversion.json.
 
-数据现实（已磁盘核验）：
-- 220_dpb_crossversion.json 内嵌 per_model[*].boot.{beta2020,dcic2021}.ci95 / frac_lt_0 / n_boot
-  —— 这些是 "SDST(各预测器自身参考) − X" 对比的 bootstrap 结果。
-- 顶层 boot_vectors 只是一个指针 (file/sha256/bytes)，真正向量在 npz/dpb_crossversion_boot.npz，
-  该 npz 当前工作树不存在 => 无法做"beta−dcic 的精确配对 bootstrap CI"。
-- 因此本脚本：
-    * 给出逐模型 PCC_beta2020 / PCC_dcic2021 / delta_beta_dcic(=beta−dcic 点估计)；
-    * 用两臂 CI 做方差传播，给 delta_beta_dcic 的【近似】CI（假设独立，保守）；
-    * 同时列出 SDST−dcic 两臂【真实】bootstrap CI 与 frac_lt_0（显著性代理）；
-    * 若未来找回 dpb_crossversion_boot.npz，可升级为精确配对 CI（见 B_sevenmodel_permutation.py 占位）。
+Data reality (verified on disk):
+- 220_dpb_crossversion.json embeds per_model[*].boot.{beta2020,dcic2021}.ci95 / frac_lt_0 / n_boot
+  -- these are the bootstrap results for the "SDST (each predictor's own reference) - X" contrast.
+- the top-level boot_vectors is only a pointer (file/sha256/bytes); the real vectors live in npz/dpb_crossversion_boot.npz,
+  which does not exist in the current working tree => an exact paired bootstrap CI for beta - dcic cannot be computed.
+- this script therefore:
+    * gives per-model PCC_beta2020 / PCC_dcic2021 / delta_beta_dcic (= the beta - dcic point estimate);
+    * propagates variance from the two-arm CIs to give an APPROXIMATE CI for delta_beta_dcic (assuming independence, conservative);
+    * also lists the REAL bootstrap CIs and frac_lt_0 for the SDST - dcic two arms (a significance proxy);
+    * if dpb_crossversion_boot.npz is recovered later, this can be upgraded to an exact paired CI (see the placeholder B_sevenmodel_permutation.py).
 
-输出：
+Output:
   results/B_sevenmodel_beta_dcic_ci.csv
   figures/FigS_sevenmodel_beta_dcic_forest.png
 """
@@ -41,13 +41,13 @@ for name, m in pm.items():
     pcc_beta = pcc['beta2020']
     pcc_dcic = pcc['dcic2021']
     pcc_sdst = pcc['sdst']
-    delta_bd = pcc_beta - pcc_dcic        # beta - dcic 点估计
+    delta_bd = pcc_beta - pcc_dcic        # beta - dcic point estimate
 
     boot_b = m['boot']['beta2020']        # SDST - beta2020
     boot_d = m['boot']['dcic2021']        # SDST - dcic2021
     ci_b = boot_b['ci95']; ci_d = boot_d['ci95']
     se_b = ci_to_se(ci_b); se_d = ci_to_se(ci_d)
-    # 近似 CI：delta_beta_dcic = (SDST-dcic) - (SDST-beta)，假设独立（保守）
+    # approximate CI: delta_beta_dcic = (SDST-dcic) - (SDST-beta), assuming independence (conservative)
     se_delta = math.sqrt(se_b**2 + se_d**2)
     lo_a = delta_bd - Z * se_delta
     hi_a = delta_bd + Z * se_delta
@@ -61,7 +61,7 @@ for name, m in pm.items():
         'ci95_high': round(hi_a, 4),
         'perm_p_proxy': boot_d['frac_lt_0'],
         'n_boot': boot_d['n_boot'],
-        # ---- 补充（真实 bootstrap 量，来自 json）----
+        # ---- supplementary (real bootstrap quantities, from the json) ----
         'PCC_sdst': round(pcc_sdst, 4),
         'ci95_low_sdst_dcic': round(ci_d[0], 4),
         'ci95_high_sdst_dcic': round(ci_d[1], 4),
@@ -71,7 +71,7 @@ for name, m in pm.items():
         'note': 'ci95=approx(var propagation, indep-assumed); exact paired CI needs dpb_crossversion_boot.npz',
     })
 
-# 排序：delta 降序
+# sort: delta descending
 rows.sort(key=lambda r: r['delta_beta_dcic'], reverse=True)
 
 core_cols = ['predictor','PCC_beta','PCC_dcic','delta_beta_dcic','ci95_low','ci95_high','perm_p_proxy','n_boot']

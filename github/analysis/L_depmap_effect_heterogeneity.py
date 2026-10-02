@@ -1,14 +1,14 @@
 """L_depmap_effect_heterogeneity.py
-基于 图源数据/DepMap_percell_delta_eval.csv（272 细胞系 × 27 列），
-刻画 DeepDEP fixed-output 评估中 reference-product 效应的异质性：
-- delta_pearson / delta_spearman 的分布
-- delta 与 product concordance（两参考平均 PCC）的相关
-- top-k retention 的 delta 分布
+Based on figure_source_data/DepMap_percell_delta_eval.csv (272 cell lines x 27 columns),
+characterize the heterogeneity of the reference-product effect in the DeepDEP fixed-output evaluation:
+- the distributions of delta_pearson / delta_spearman
+- the correlation of delta with product concordance (the mean PCC across the two references)
+- the delta distribution of top-k retention
 """
 import csv, os
 import numpy as np
 
-SRC = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/图源数据'
+SRC = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/figure_source_data'
 RES = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/results'
 os.makedirs(RES, exist_ok=True)
 

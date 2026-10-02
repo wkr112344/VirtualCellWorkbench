@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PRnet_commonX_train_eval.py — 训练「完整A」受控 2×2 的两条 PRnet 训练臂，
-并在 S25 评测留出集上做双 truth 评价，得到四格 BB/BD/DB/DD 与 interaction。
+PRnet_commonX_train_eval.py -- train the two PRnet arms of the "full set A" controlled 2x2,
+and run dual-truth evaluation on the S25 held-out set to get the four cells BB/BD/DB/DD and the interaction.
 
-设计约束（与 PRnet_commonX_build.py 锁死一致）：
-  - 两臂共用完全相同的输入 X = [X_baseline(969), drug_emb(1024), dose_z, time_z] (1026)
-  - 两臂共用完全相同的网络结构 / 超参 / 优化器 / seed / 切分
-  - 唯一变量 = training target reference：β 表达 (Y_beta) vs dcic2021 CD 签名 (Y_dcic)
-  - 评价用尺度无关相关系数 (pearson + spearman, 逐 sample 969 维向量相关)，跨样本聚合
-  - interaction = (BB - BD) - (DB - DD)，带 bootstrap 95% CI
+Design constraints (locked identically to PRnet_commonX_build.py):
+  - both arms share exactly the same input X = [X_baseline(969), drug_emb(1024), dose_z, time_z] (1026)
+  - both arms share exactly the same network architecture / hyperparameters / optimizer / seed / split
+  - the only variable = training target reference: beta expression (Y_beta) vs dcic2021 CD signature (Y_dcic)
+  - evaluation uses scale-invariant correlations (pearson + spearman, per-sample 969-dim vector correlation), aggregated across samples
+  - interaction = (BB - BD) - (DB - DD), with a bootstrap 95% CI
 
-数据：data/prnet_commonX/PRnet_commonX_dualY.h5 (由 build 脚本产出)
-切分：split 0/1/2 = train/val/test(训练臂用)；split 3 = S25 评测留出(不参与训练)
+Data: data/prnet_commonX/PRnet_commonX_dualY.h5 (produced by the build script)
+Split: split 0/1/2 = train/val/test (used by the training arms); split 3 = S25 evaluation hold-out (not used in training)
 
-内存策略：所有数组从 h5 按行块流式读取，绝不整体载入 RAM（兼容 ~3M 样本全量）。
+Memory strategy: all arrays are streamed from h5 in row chunks, never loaded fully into RAM (handles the full ~3M samples).
 """
 import argparse, json, os, sys, math, random
 import h5py
@@ -23,7 +23,7 @@ import torch
 import torch.nn as nn
 from scipy.stats import pearsonr, spearmanr
 
-# ============================================================ PRnet 模型 (PGM)
+# ============================================================ PRnet model (PGM)
 class PEncoder(nn.Module):
     def __init__(self, layer_sizes, z_dim, dr):
         super().__init__()
@@ -106,7 +106,7 @@ class PGM(nn.Module):
         z = self.encoder(torch.cat((x, c), 1))
         return self.decoder(torch.cat((z, c, n), 1))
 
-# ============================================================ 超参（与 train_lincs.py 锁死）
+# ============================================================ hyperparameters (locked to train_lincs.py)
 X_DIM = 969
 HIDDEN = [128]
 Z_DIM = 64
@@ -121,7 +121,7 @@ N_EPOCHS = 200
 SEED = 2024
 SCHED_PATIENCE = 10
 EARLY_PATIENCE = 20
-CHUNK = 20000        # 流式读取行块大小
+CHUNK = 20000        # streaming row-chunk size
 
 def make_model(device):
     torch.manual_seed(SEED); np.random.seed(SEED); random.seed(SEED)
@@ -135,7 +135,7 @@ def weight_init(m):
         m.weight.data.normal_(1, 0.02)
         if m.bias is not None: m.bias.data.zero_()
 
-# ============================================================ 流式 batch 生成器（磁盘读取，不进 RAM）
+# ============================================================ streaming batch generator (reads from disk, not RAM)
 def iter_batches(h5, idx, Yname, dose_z, time_z, batch, shuffle, device, with_y=True):
     sidx = np.sort(idx)
     for s in range(0, len(sidx), CHUNK):
@@ -169,7 +169,7 @@ def corr_pair(pred, true, method):
             out[r] = np.nan if (len(np.unique(a)) < 2 or len(np.unique(b)) < 2) else spearmanr(a, b)[0]
     return out
 
-# ============================================================ 主流程
+# ============================================================ main flow
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/data/prnet_commonX/PRnet_commonX_dualY.h5")
@@ -194,7 +194,7 @@ def main():
 
     train_idx = np.where(split == 0)[0]
     val_idx = np.where(split == 1)[0]
-    if len(val_idx) > 60000:   # 全量 val 极多，仅取子集做 early-stopping 监控以提速
+    if len(val_idx) > 60000:   # full-scale val is huge; use a subset for early-stopping monitoring to speed up
         rng = np.random.default_rng(SEED)
         val_idx = rng.choice(val_idx, 60000, replace=False)
     eval_idx = np.where(split == 3)[0]

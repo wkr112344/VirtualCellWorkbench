@@ -1,7 +1,7 @@
-# 三 panel 图：positive control 闭环
+# Three-panel figure: positive-control loop
 #   A: residualized by-cell correlation（gene-mean baseline / permuted Ridge / real Ridge / frozen）
-#   B: gene-wise across-cell correlation（同四个对象）
-#   C: Ridge 与 Frozen 的 2×2 heatmap（raw 与 residualized 两口径）+ interaction
+#   B: gene-wise across-cell correlation (same four objects)
+#   C: 2x2 heatmap for Ridge and Frozen (raw and residualized calibers) + interaction
 import json, os
 import numpy as np
 import matplotlib

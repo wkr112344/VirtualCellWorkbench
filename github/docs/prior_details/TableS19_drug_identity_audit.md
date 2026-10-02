@@ -1,57 +1,61 @@
-# 补充表 S19 · 留出药物的身份审计（ID 级留出 vs 化学冷启动）
+# Supplementary Table S19 · Identity audit of the held-out drugs (ID-level hold-out vs chemical cold start)
 
-对应正文编号 **S21**（见正文「随附文件编号对照」）。
+Corresponds to main-text number **S21** (see the main text's "accompanying-file numbering cross-reference").
 
-**一句话**：本文的「留出药物」是**药物 ID 级**留出，**不等于**化学冷启动 ——
-3204 个留出药物里有 2284 个（71.3%）在训练集存在**逐位相同**的 ECFP4 指纹孪生，
-结构上真正新颖的只有 920 个。
+**In one sentence:** the "held-out drugs" here are held out at the **drug-ID** level, which is **not** the same as a
+chemical cold start — 2,284 of the 3,204 held-out drugs (71.3%) have a **bit-identical** ECFP4 fingerprint twin in
+the training set, leaving only 920 that are structurally genuinely novel.
 
-## S19.1 留出药物的指纹孪生分析
+## S19.1 Fingerprint-twin analysis of the held-out drugs
 
-主源（`level5beta2020`）官方后 10% 药物级留出，共 3204 个药物；训练集 28835 个药物。
-指纹取 ECFP4（2048 bit），对每个留出药物取「与训练集全部药物的最大 Tanimoto」，逐位比对。
+The main source (`level5beta2020`) has an official last-10% drug-level hold-out, 3,204 drugs; the training set has
+28,835 drugs. Fingerprints are ECFP4 (2048 bits); for each held-out drug we take the maximum Tanimoto similarity to
+all training-set drugs and compare bit by bit.
 
-| 指标 | 数值 | 占留出药物 | 口径说明 |
+| Metric | Value | Share of held-out drugs | Caliber note |
 |---|---|---|---|
-| 留出药物总数 | **3204** | 100% | 官方后 10%，药物级切分 |
-| 其中：训练集存在**逐位相同**指纹孪生 | **2284** | **71.3%** | 不是化学鉴定，是「指纹逐位相同」这一可复算事实 |
-| 其中：结构上真正新颖（训练集无全同指纹） | **920** | 28.7% | = 3204 − 2284 |
-| 最大 Tanimoto 的中位数 | **1.0** | — | p25 = 0.7953；min = 0.1429；max = 1.0 |
-| 阈值敏感性：Tanimoto ≥ 0.99 | 2284 | — | 与「全同」同集 |
-| 阈值敏感性：Tanimoto ≥ 0.90 | 2300 | — | 放宽到 0.90 只多 16 个 |
-| 留出药物**内部**的重复 | 687 对 / 5131206 对 | — | 留出集自身也含重叠，不改变上述结论 |
+| Total held-out drugs | **3204** | 100% | official last 10%, drug-level split |
+| Of which: bit-identical fingerprint twin in training set | **2284** | **71.3%** | not a chemical judgment, but the recomputable fact of "bit-identical fingerprint" |
+| Of which: structurally genuinely novel (no identical fingerprint in training) | **920** | 28.7% | = 3204 − 2284 |
+| Median of max Tanimoto | **1.0** | — | p25 = 0.7953; min = 0.1429; max = 1.0 |
+| Threshold sensitivity: Tanimoto ≥ 0.99 | 2284 | — | same set as "identical" |
+| Threshold sensitivity: Tanimoto ≥ 0.90 | 2300 | — | relaxing to 0.90 adds only 16 |
+| Duplicates **within** the held-out drugs | 687 pairs / 5,131,206 pairs | — | the held-out set itself also overlaps; does not change the above |
 
-**最大 Tanimoto 的中位数为 1.0，即过半留出药物在训练集里能找到指纹完全一致的伙伴。**
-这一条约束的是**解释**，不是读数：本文所有跨源 / 跨层比较都固定同一批留出药物，
-拆分不进入任何模型的训练或评测。
+**The median of max Tanimoto is 1.0, i.e. more than half of the held-out drugs have a fingerprint-identical partner
+in the training set.** This constrains the **interpretation**, not the reading: every cross-source / cross-layer
+comparison here fixes the same set of held-out drugs, and the split never enters any model's training or evaluation.
 
-## S19.2 指纹文件本身的统计
+## S19.2 Statistics of the fingerprint file itself
 
-| 项 | 数值 |
+| Item | Value |
 |---|---|
-| 指纹比特数 | 2048 bit（ECFP4） |
-| 指纹文件行数 | **32039** |
-| 其中不同指纹数 | **13151** |
-| 重复组数 | **4610** |
+| Fingerprint bits | 2048 bit (ECFP4) |
+| Rows in the fingerprint file | **32039** |
+| Of which distinct fingerprints | **13151** |
+| Number of duplicate groups | **4610** |
 
-32039 行只对应 13151 个不同指纹 —— **药物身份在源数据里本身就高度重复**。
-这也是「药物级留出」在 LINCS 语料上不等于化学冷启动的直接原因。
+32,039 rows correspond to only 13,151 distinct fingerprints — **drug identity is itself highly duplicated in the
+source data**. This is the direct reason why a "drug-level hold-out" on the LINCS corpus is not a chemical cold start.
 
-## S19.3 对全文「未见药物」措辞的限定
+## S19.3 Restricting the manuscript's "unseen drug" wording
 
-据此，本文对措辞作如下限定，全文一致：
+Accordingly, the wording is restricted as follows, consistently throughout:
 
-1. 凡声称「未见药物」处，一律读作「**未见药物 ID**」：所指为「该药物 ID 在本轮训练划分中未出现」，
-   而非「该分子在化学上未被见过」。
-2. 「化学冷启动」这一更强的主张**本文不作**。真正结构新颖的对照规模是 **920** 个药物，
-   不是全部 3204 个。
-3. 「逐位相同指纹」是**可复算事实**（ECFP4，2048 bit，与 `results/` 同源缓存），
-   不是化学同一性判断：两个不同 ID 可能指纹相同，同一分子的不同盐型 / 立体异构也可能指纹不同。
-4. 该限定**不改变任何既有读数**。它不是本表新提出的稳健性问题，而是对「留出到底留出了什么」
-   这一前提的披露 —— 与 S14（稳健性）讨论的「换源后读数是否改变」正交。
+1. Anywhere "unseen drug" is claimed, it reads as "**unseen drug ID**": it means "this drug ID did not appear in this
+   round's training split", not "this molecule has never been seen chemically".
+2. The stronger claim "chemical cold start" is **not made** in this paper. The genuinely structurally novel control
+   has a size of **920** drugs, not all 3,204.
+3. "Bit-identical fingerprint" is a **recomputable fact** (ECFP4, 2048 bit, from the same cache as `results/`),
+   not a chemical-identity judgment: two different IDs may share a fingerprint, and different salt forms / stereoisomers
+   of the same molecule may have different fingerprints.
+4. This restriction **does not change any existing reading.** It is not a new robustness problem raised by this table,
+   but a disclosure of the premise "what exactly is held out" — orthogonal to the "does the reading change after
+   switching sources" discussed in S14 (robustness).
 
-## 复算方式
+## How to recompute
 
-本表全部数字由 `_scratch/v31_mvpa/78_leakage_audit.py` 的 `blocks.drug_identity` 段落计算并落盘为
-`_scratch/v31_mvpa/78_leakage_audit.json`；本表的 md 与 csv 由
-`_scratch/v31_mvpa/89_build_TableS19.py` 直接读取该 JSON 生成，**不手抄**。
+Every number in this table was computed by the `blocks.drug_identity` section of
+`_scratch/v31_mvpa/78_leakage_audit.py` and written to `_scratch/v31_mvpa/78_leakage_audit.json`; the markdown and csv
+of this table are generated by `_scratch/v31_mvpa/89_build_TableS19.py` reading that JSON directly, **not transcribed
+by hand**.

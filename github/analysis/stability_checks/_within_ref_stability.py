@@ -1,11 +1,11 @@
-"""within-reference top-k stability（作者提出的关键缺口分析）——最终版。
+"""within-reference top-k stability (the key gap analysis proposed by the authors) -- final version.
 
-三个对照：
-  V1 行级 bootstrap（全部 2,037 药物）——作者方案：固定参考与药物定义，只重采样组成药物分数的评价行
-  V2 行级 bootstrap（仅覆盖 ≥3 行的 1,303 药物子集）——让 bootstrap 真正有力的口径
-  V3 药物层面 cluster bootstrap——重采样药物整体（考察"换一批药物"的量级），已修正为按药物身份统计
-统一基准（供参考）：V0 随机列表期望重合 k²/N（原稿的弱 null）
-输出：within_reference_topk_stability.csv（逐 k 三档 + 跨参考观测 + 随机期望 + 是否低于下界）
+Three comparisons:
+  V1 row-level bootstrap (all 2,037 drugs) -- the proposed approach: fix the reference and drug definitions, resample only the evaluation rows making up each drug score
+  V2 row-level bootstrap (the 1,303-drug subset with >=3 rows) -- the caliber that gives the bootstrap real power
+  V3 drug-level cluster bootstrap -- resamples whole drugs (gauging the "different drug set" magnitude); corrected to count by drug identity
+common baseline (for reference): V0 random-list expected overlap k^2/N (the weak null of the original manuscript)
+Output: within_reference_topk_stability.csv (per-k three variants + cross-reference observation + random expectation + whether below the lower bound)
 """
 import numpy as np
 import pandas as pd
@@ -31,7 +31,7 @@ def rank_spearman(a, b):
 
 
 def run(drug_list, mode):
-    """mode='row' 行级重采样；'drug' 药物整体重采样（按药物身份比较）。"""
+    """mode='row' row-level resampling; 'drug' whole-drug resampling (compared by drug identity)."""
     N = len(drug_list)
     obs = {s: np.array([per[s][dr].mean() for dr in drug_list]) for s in COLS}
     res = {}
@@ -44,7 +44,7 @@ def run(drug_list, mode):
                     a = per[s][dr]; n = a.size
                     v[i] = a[rng.integers(0, n, n)].mean() if n > 1 else a[0]
             else:
-                pick = rng.integers(0, N, N)          # 抽药物身份
+                pick = rng.integers(0, N, N)          # draw drug identities
                 cnt = np.bincount(pick, minlength=N)
                 v = np.array([per[s][drug_list[i]].mean() if cnt[i] else 0.0 for i in range(N)])
             reps.append(v)
@@ -66,32 +66,32 @@ def cross_overlap(res):
 
 
 print('=' * 92)
-print('V1  行级 bootstrap，全部药物 N=%d' % len(all_drugs))
+print('V1  row-level bootstrap, all drugs N=%d' % len(all_drugs))
 r1 = run(all_drugs, 'row'); c1 = cross_overlap(r1)
 print('%-6s %-22s %-22s %-12s %-10s' % ('k', 'within-β [2.5%,97.5%]', 'within-dcic', 'cross-ref', 'random'))
 for k in KS:
     b, c = r1['beta']['per_k'][k], r1['dcic']['per_k'][k]
     print('%-6d %-22s %-22s %-12s %-10.2f' % (k, '%.1f [%.0f, %.0f]' % b, '%.1f [%.0f, %.0f]' % c,
                                               '%d (%.0f%%)' % (c1[k], 100 * c1[k] / k), k * k / len(all_drugs)))
-print('replicate 间排名 Spearman：β %.4f，dcic %.4f ｜ 观测跨参考 %.4f' % (
+print('between-replicate rank Spearman: beta %.4f, dcic %.4f | observed cross-reference %.4f' % (
     np.mean(r1['beta']['rho']), np.mean(r1['dcic']['rho']), rank_spearman(r1['beta']['obs'], r1['dcic']['obs'])))
 
 print()
 print('=' * 92)
-print('V2  行级 bootstrap，仅覆盖 ≥3 行的子集 N=%d' % len(sub3))
+print('V2  row-level bootstrap, subset with >=3 rows N=%d' % len(sub3))
 r2 = run(sub3, 'row'); c2 = cross_overlap(r2)
-print('%-6s %-22s %-22s %-12s %-12s' % ('k', 'within-β [2.5%,97.5%]', 'within-dcic', 'cross-ref', '是否低于下界'))
+print('%-6s %-22s %-22s %-12s %-12s' % ('k', 'within-beta [2.5%,97.5%]', 'within-dcic', 'cross-ref', 'below lower bound'))
 for k in KS:
     b, c = r2['beta']['per_k'][k], r2['dcic']['per_k'][k]
-    flag = '是' if c2[k] < max(b[1], c[1]) else '否（在波动内）'
+    flag = 'yes' if c2[k] < max(b[1], c[1]) else 'no (within fluctuation)'
     print('%-6d %-22s %-22s %-12s %-12s' % (k, '%.1f [%.0f, %.0f]' % b, '%.1f [%.0f, %.0f]' % c,
                                             '%d (%.0f%%)' % (c2[k], 100 * c2[k] / k), flag))
-print('replicate 间排名 Spearman：β %.4f，dcic %.4f ｜ 观测跨参考 %.4f' % (
+print('between-replicate rank Spearman: beta %.4f, dcic %.4f | observed cross-reference %.4f' % (
     np.mean(r2['beta']['rho']), np.mean(r2['dcic']['rho']), rank_spearman(r2['beta']['obs'], r2['dcic']['obs'])))
 
 print()
 print('=' * 92)
-print('V3  药物层面 cluster bootstrap（全药物）')
+print('V3  drug-level cluster bootstrap (all drugs)')
 r3 = run(all_drugs, 'drug'); c3 = cross_overlap(r3)
 for k in [10, 20, 50, 100, 204]:
     b, c = r3['beta']['per_k'][k], r3['dcic']['per_k'][k]
@@ -116,4 +116,4 @@ for k in KS:
         'V2_n_drugs': len(sub3), 'V1_n_drugs': len(all_drugs)})
 pd.DataFrame(rows).to_csv(OUT, index=False)
 print()
-print('输出:', OUT)
+print('output:', OUT)

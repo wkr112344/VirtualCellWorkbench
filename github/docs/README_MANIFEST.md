@@ -1,55 +1,60 @@
-# DepMap 原始产物 · 供「共同基因背景对照（残差化 2×2）」实验
+# DepMap raw artifacts · for the "shared-gene background control (residualized 2×2)" experiment
 
-生成：2026-09-29（仅复制与校验，未改原始数据）
+Generated 2026-09-29 (copy and checksum only; the raw data was not modified).
 
-## 网格与行/列口径（**务必按此读取**）
+## Grid and row/column calibers (**read the matrices exactly as described here**)
 
-- 全部 908 × 17393 矩阵的行序 = `index/cell_order.txt`
-- 列序 = `index/target_genes.txt`，格式为 `SYMBOL (EntrezID)`，如 `A1BG (1)`
-  → 与外部基因名匹配时须去掉 ` (id)` 后缀再比对
-- `*_test.npy` 的行序 = `index/test_cell_order.txt`（136 个）
-  → 已验证：与 `split.json` 的 `test_cells` **顺序完全一致**
-- 切分来自 `index/split.json`（**seed 42**，训练时锁定、不得重切）：
-  train 636 / val 136 / test 136
+- Row order of every 908 × 17393 matrix = `index/cell_order.txt`
+- Column order = `index/target_genes.txt`, formatted as `SYMBOL (EntrezID)`, e.g. `A1BG (1)`
+  → when matching against external gene names, strip the ` (id)` suffix first.
+- Row order of `*_test.npy` = `index/test_cell_order.txt` (136 cells)
+  → verified: **identical in order** to `test_cells` in `split.json`.
+- The split comes from `index/split.json` (**seed 42**, locked during training, do not re-split):
+  train 636 / val 136 / test 136.
 
-## 目录
+## Directory
 
-| 路径 | 内容 | 形状 |
+| Path | Content | Shape |
 |---|---|---|
-| `reference/Y_CERES.npy` | CERES 参考 | (908, 17393) float32 |
-| `reference/Y_Chronos.npy` | Chronos 参考 | (908, 17393) float32 |
-| `reference/common_observed_mask.npy` | 共同观测掩码（NaN 处理，勿插补） | (908, 17393) bool |
-| `predictions_test/seed{0-4}_pred_ceres_arm_test.npy` | CERES-trained 臂 test 预测 | (136, 17393) float32 |
-| `predictions_test/seed{0-4}_pred_chronos_arm_test.npy` | Chronos-trained 臂 test 预测 | (136, 17393) float32 |
-| `first_predictor_DeepDEP/DeepDEP_predictor_final.csv` | 第一 predictor 冻结预测 | 273 × 1244 |
-| `first_predictor_DeepDEP/DeepDEP_predictor_strict.csv` | 同上 strict 版 | 272 × 1244 |
+| `reference/Y_CERES.npy` | CERES reference | (908, 17393) float32 |
+| `reference/Y_Chronos.npy` | Chronos reference | (908, 17393) float32 |
+| `reference/common_observed_mask.npy` | common observed mask (NaN handling; do not impute) | (908, 17393) bool |
+| `predictions_test/seed{0-4}_pred_ceres_arm_test.npy` | CERES-trained arm test predictions | (136, 17393) float32 |
+| `predictions_test/seed{0-4}_pred_chronos_arm_test.npy` | Chronos-trained arm test predictions | (136, 17393) float32 |
+| `first_predictor_DeepDEP/DeepDEP_predictor_final.csv` | first-predictor frozen predictions | 273 × 1244 |
+| `first_predictor_DeepDEP/DeepDEP_predictor_strict.csv` | same, strict version | 272 × 1244 |
 
-`index/depmap_index.json` 提供机器可读索引，含
-`train_rows_in_cell_order` / `test_rows_in_cell_order` —— 取"仅训练细胞的 gene mean"
-直接用 `train_rows_in_cell_order` 索引 Y 即可。
+`index/depmap_index.json` provides a machine-readable index containing
+`train_rows_in_cell_order` / `test_rows_in_cell_order` — to take the "training-cells-only gene mean"
+just index Y with `train_rows_in_cell_order`.
 
-## ⚠ 已知约束（影响"公平比较"能否成立）
+## ⚠ Known constraint (affects whether a "fair comparison" is possible)
 
-第一 predictor（DeepDEP）与第二 predictor（VAE-DeepDEP）**不在同一网格**：
+The first predictor (DeepDEP) and the second predictor (VAE-DeepDEP) **do not sit on the same grid**:
 
-| 项 | final | strict |
+| Item | final | strict |
 |---|---|---|
 | shape | 273 × 1244 | 272 × 1244 |
-| 基因 ∩ GH 17393 | 1244 | 1244 |
-| 细胞 ∩ 全部 908 | 272 | 271 |
-| **细胞 ∩ test 136** | **43** | **43** |
-| 细胞 ∩ train 636 | 190 | 189 |
+| genes ∩ GH 17393 | 1244 | 1244 |
+| cells ∩ all 908 | 272 | 271 |
+| **cells ∩ test 136** | **43** | **43** |
+| cells ∩ train 636 | 190 | 189 |
 
-**结论**：基因 1244 个全部落在 GH 的 17393 里，但细胞只有 43/136
-个落在 test 集。若要把 DeepDEP 与两个训练臂一起做"公平比较"，评测会被迫缩到
-**43 个 test 细胞 × 1244 基因**。
+**Conclusion**: all 1244 genes fall inside the 17393 of GH, but only 43/136 cells fall in the test set.
+To compare DeepDEP and the two training arms on equal footing, the evaluation is forced down to
+**43 test cells × 1244 genes**.
 
-这是设计层面的取舍，两种处理：
-1. **主分析只用第二 predictor**（136 test 细胞 × 17393 基因，网格完整）；
-2. DeepDEP 作为补充对照，在 43×1244 子网格上做，并明确标注该比较受网格限制。
+This is a design-level trade-off with two options:
+1. **Use only the second predictor for the main analysis** (136 test cells × 17393 genes, complete grid);
+2. Keep DeepDEP as a supplementary contrast on the 43×1244 sub-grid, explicitly flagging the grid limitation.
 
-## 原始数据位置（未改动）
+## Original data locations (unmodified)
 
-- 数据：`C:\Users\wkr20\Desktop\depmap_second_corpus\work\DeepDEP_training_data\aligned_21Q2_908_3omics`
-- 预测：`C:\Users\wkr20\Desktop\depmap_second_corpus\GH_second_predictor\predictions`
-- 第一 predictor：`C:\Users\wkr20\Desktop\depmap_second_corpus\work\fixed_eval_input`
+- Data: `C:\Users\wkr20\Desktop\depmap_second_corpus\work\DeepDEP_training_data\aligned_21Q2_908_3omics`
+- Predictions: `C:\Users\wkr20\Desktop\depmap_second_corpus\GH_second_predictor\predictions`
+- First predictor: `C:\Users\wkr20\Desktop\depmap_second_corpus\work\fixed_eval_input`
+
+> Note on `MANIFEST.csv`: the `source_in_workspace` column records the authors' local directory layout at
+> packaging time. Non-ASCII local directory names (the Chinese-named "figure source data" and
+> "supplementary material" directories) were normalized to ASCII (`figure_source_data`, `supplementary`)
+> so that every path in this package is plain ASCII; the mapping is 1:1.

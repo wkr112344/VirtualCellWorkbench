@@ -1,1 +1,2 @@
-# 由代码 import 汇总；版本按作者运行环境固定（建议 pip freeze 后替换为精确版本）
+# Third-party packages imported by the analysis code; versions are those of the
+# authors' runtime environment (replace with pinned versions from `pip freeze`).

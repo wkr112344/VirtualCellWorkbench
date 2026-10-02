@@ -1,8 +1,8 @@
-# 03 对齐两套 product（快速版）
-#   pass1: 裸 gzip 流 + 有限 split 只取基因名列，确定共同基因空间（快）
-#   pass2: pandas C 引擎分块读 GCT（header=2），按块转置写入 memmap
-#   RSEM:  npy(memmap) 按行序分块映射到共同基因列
-# 输出 memmap (n_samples × n_genes) float32：data_processed/{rnaseqc,rsem_gene}.npy
+# 03 Align the two products (fast version)
+#   pass1: raw gzip stream + bounded split over the gene-name column only, to fix the common gene space (fast)
+#   pass2: read GCT in chunks with the pandas C engine (header=2), transpose each chunk into a memmap
+#   RSEM:  map the npy (memmap) in row-order chunks onto the common gene columns
+# Output memmap (n_samples x n_genes) float32: data_processed/{rnaseqc,rsem_gene}.npy
 import os, sys, json, time, zlib
 import numpy as np
 import pandas as pd
@@ -20,29 +20,29 @@ def strip_v(g):
     return g.split(".")[0] if cfg["analysis"]["strip_gene_version"] else g
 
 
-# --- RSEM gene 矩阵（memmap） ---
-log("打开 RSEM gene 矩阵")
+# --- RSEM gene matrix (memmap) ---
+log("opening the RSEM gene matrix")
 meta = json.load(open(p("data_processed", "RSEM_gene_tpm.meta.json")))
 R = np.load(p("data_processed", "RSEM_gene_tpm.npy"), mmap_mode="r")
 rsem_genes_raw = meta["gene_ids"]
 rsem_samples = meta["samples"]
-assert set(rsem_samples) == set(samples), "RSEM 与 GCT 样本集合不一致"
+assert set(rsem_samples) == set(samples), "RSEM and GCT sample sets differ"
 B_samplecols = np.array([rsem_samples.index(s) for s in samples], dtype=np.int64)
 rsem_row = {strip_v(g): i for i, g in enumerate(rsem_genes_raw)}
-log("RSEM: %d 基因 × %d 样本 (memmap %.2f GB)" % (R.shape[0], R.shape[1], R.shape[0]*R.shape[1]*4/1e9))
+log("RSEM: %d genes x %d samples (memmap %.2f GB)" % (R.shape[0], R.shape[1], R.shape[0]*R.shape[1]*4/1e9))
 
-# --- pass1 已由 02 完成：直接复用其基因列表（= GCT∩RSEM，74,628） ---
-common = list(rsem_row.keys())   # 02 的收录顺序（RSEM 文件序），A/B 两 memmap 列序一致即可
+# --- pass1 already done by 02: reuse its gene list (= GCT intersected with RSEM, 74,628) ---
+common = list(rsem_row.keys())   # the order kept by 02 (RSEM file order); the A/B memmaps just need matching column order
 NG = len(common)
-log("共同基因 %d 个（复用 02 结果，免重扫）" % NG)
+log("%d common genes (reusing 02 result, no rescan)" % NG)
 
 A = np.lib.format.open_memmap(p("data_processed", "rnaseqc.npy"), mode="w+",
                               dtype=np.float32, shape=(S, NG))
 Bm = np.lib.format.open_memmap(p("data_processed", "rsem_gene.npy"), mode="w+",
                                dtype=np.float32, shape=(S, NG))
 
-# --- pass2: zlib+loadtxt 流式读 GCT，写 A ---
-log("pass2: 流式读 GCT -> rnaseqc.npy")
+# --- pass2: stream-read GCT with zlib+loadtxt, write A ---
+log("pass2: streaming GCT -> rnaseqc.npy")
 from common import iter_tsv_gz_blocks
 gidx = {g: j for j, g in enumerate(common)}
 t0 = time.time()
@@ -55,11 +55,11 @@ for gid, vals in iter_tsv_gz_blocks(cfg["paths"]["gene_tpm_gz"],
         cols = np.fromiter((gidx[g] for g in gid), np.int64, len(gid))[mask]
         A[:, cols] = vals[mask].T
     done += len(gid)
-    log("  GCT %d/%d 行, %.0fs" % (done, EXP_GCT_ROWS, time.time()-t0))
+    log("  GCT %d/%d rows, %.0fs" % (done, EXP_GCT_ROWS, time.time()-t0))
 A.flush()
 
-# --- RSEM 分块映射（按 RSEM 行序收集列，块转置写入） ---
-log("RSEM -> rsem_gene.npy（分块转置）")
+# --- RSEM chunk mapping (collect columns in RSEM row order, write transposed chunks) ---
+log("RSEM -> rsem_gene.npy (chunked transpose)")
 order = [(i, gidx[g]) for g, i in ((g, rsem_row[g]) for g in common)]  # (rsem_row, out_col)
 t0 = time.time()
 K = 2000

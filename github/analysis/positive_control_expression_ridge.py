@@ -1,21 +1,21 @@
 # DepMap positive control: expression-PCA -> multi-output Ridge
-#   目的：在同一条 Figure 6 划分（train 636 / test 136）上，验证"真正依赖细胞状态特征"的
-#   预测器在 residualized 评价下是否仍保留正信号，并与冻结模型对照。
+#   Purpose: on the same Figure 6 split (train 636 / test 136), test whether a predictor that genuinely
+#   relies on cell-state features retains a positive signal under residualized evaluation, and contrast it with the frozen model.
 #
-# 指标定义（关键）：
-#   by-cell raw        : 每个 test 细胞，跨基因 Pearson(pred, truth)
-#   by-cell shift      : 同时减训练集 per-gene 均值 -> 【数学上与 raw 恒等】，仅作校验
-#   by-cell zres       : (pred-mu)/sd vs (truth-mu)/sd，mu/sd 只用训练细胞 -> 真正的"去 gene-level 背景"
-#   across-cell raw    : 每个基因，跨 test 细胞 Pearson(pred, truth)（对 per-gene 平移不变）
-#   across-cell zres   : 同上但先做 per-gene z（等价于 raw，因为对 per-gene 仿射不变），做校验
+# Metric definitions (key):
+#   by-cell raw        : per test cell, across-gene Pearson(pred, truth)
+#   by-cell shift      : subtract the per-gene training mean from both -> [mathematically identical to raw], a check only
+#   by-cell zres       : (pred-mu)/sd vs (truth-mu)/sd with mu/sd from training cells only -> the real "gene-level background removal"
+#   across-cell raw    : per gene, across test cells Pearson(pred, truth) (invariant to per-gene shift)
+#   across-cell zres   : as above but with per-gene z first (equivalent to raw, being invariant to per-gene affine transforms); a check
 #
-# 对象：
-#   mean_baseline (negative/基础对照)：预测 = 训练集 per-gene 均值（常数向量）
-#   ridge_CERES / ridge_Chronos (positive control)：X_TPM -> PCA(100) -> Ridge，训练靶标分别为 CERES/Chronos
-#   ridge_perm (label-permutation negative control)：打乱训练 Y 的行标签后同流程
-#   frozen_G2CP (参照)：既有 depmap_analysis_ready 的 5-seed 平均预测，两臂各一份
+# Objects:
+#   mean_baseline (negative/basic control): prediction = per-gene training mean (a constant vector)
+#   ridge_CERES / ridge_Chronos (positive control): X_TPM -> PCA(100) -> Ridge, with training targets CERES/Chronos respectively
+#   ridge_perm (label-permutation negative control): same pipeline after shuffling the training Y row labels
+#   frozen_G2CP (reference): the existing 5-seed averaged predictions from depmap_analysis_ready, one per arm
 #
-# 输出：results/*.csv|json、figures/panel_ABC_positive_control.png
+# Output: results/*.csv|json, figures/panel_ABC_positive_control.png
 import os, sys, json, time
 import numpy as np
 from scipy.stats import rankdata   # noqa: F401
@@ -50,7 +50,7 @@ def load():
 
 
 def corr_rows(P, T, M):
-    """逐行（=逐细胞）跨列 Pearson。零方差预测按定义记 0（无线性信息）。"""
+    """Per-row (=per-cell) across-column Pearson. A zero-variance prediction is recorded as 0 by definition (no linear information)."""
     out = np.full(P.shape[0], np.nan)
     for i in range(P.shape[0]):
         m = M[i] & np.isfinite(T[i]) & np.isfinite(P[i])
@@ -68,7 +68,7 @@ def corr_rows(P, T, M):
 
 
 def sanitize_mu_sd(mu, sd, mtr, Ytr):
-    """mu 的 NaN 用 0 代替、sd 的 NaN/0 用 1 代替 —— 保证 shift/zres 与 raw 用同一基因集。"""
+    """NaN mu replaced by 0 and NaN/0 sd by 1 -- so shift/zres and raw use the same gene set."""
     mu = np.nan_to_num(np.asarray(mu, dtype=np.float64), nan=0.0)
     sd = np.asarray(sd, dtype=np.float64)
     bad = (~np.isfinite(sd)) | (sd <= 0)
@@ -77,7 +77,7 @@ def sanitize_mu_sd(mu, sd, mtr, Ytr):
 
 
 def corr_cols(P, T, M):
-    """逐列（=逐基因）跨行 Pearson：对 per-gene 平移/缩放不变。返回 (G,) + 有效细胞数。"""
+    """Per-column (=per-gene) across-row Pearson: invariant to per-gene shift/scale. Returns (G,) + number of valid cells."""
     n, G = P.shape
     out = np.full(G, np.nan); ns = np.zeros(G, np.int32)
     for g in range(G):
@@ -94,7 +94,7 @@ def corr_cols(P, T, M):
 
 
 def boot_median_ci(vals, cells, nboot=N_BOOT, seed=SEED):
-    """按 test 细胞（=donor 单元）重采样，对 median 或 median-of-cell-medians 给 CI。"""
+    """Resample by test cell (= donor unit) to give a CI for the median or the median-of-cell-medians."""
     rng = np.random.default_rng(seed)
     v = np.asarray(vals, dtype=np.float64)
     ok = np.isfinite(v)
@@ -116,12 +116,12 @@ def boot_median_ci(vals, cells, nboot=N_BOOT, seed=SEED):
 
 
 def zres_stats(P, T, M, mu, sd):
-    """三个口径：
-       raw   : 原样
-       shift : 同时减 per-gene 训练均值（用户原设计；注意 per-gene 常数不是全局常数，
-               因此这会真实改变跨基因相关 —— 它剥掉的是跨基因共享的 gene-level background）
-       z     : 再除以 per-gene 训练标准差（额外做 per-gene 尺度归一）
-       返回 (r_raw, r_shift, r_z, corr(r_shift, r_z))"""
+    """Three calibers:
+       raw   : as is
+       shift : subtract the per-gene training mean from both (the original design; note a per-gene constant is not a global constant,
+               so this genuinely changes the across-gene correlation -- it removes the gene-level background shared across genes)
+       z     : additionally divide by the per-gene training standard deviation (an extra per-gene scale normalization)
+       Returns (r_raw, r_shift, r_z, corr(r_shift, r_z))"""
     Ps = P - mu; Ts = T - mu
     Pz = Ps / sd; Tz = Ts / sd
     r_raw = corr_rows(P, T, M)
@@ -135,28 +135,28 @@ def zres_stats(P, T, M, mu, sd):
 def main():
     t0 = time.time()
     X, Ycer, Ychr, mask, split, idx = load()
-    log("载入: X%s Ycer%s mask%s" % (X.shape, Ycer.shape, mask.shape))
+    log("loaded: X%s Ycer%s mask%s" % (X.shape, Ycer.shape, mask.shape))
 
     tr = np.array(idx["train_rows_in_cell_order"], dtype=np.int64)
     te = np.array(idx["test_rows_in_cell_order"], dtype=np.int64)
     cells = [l.strip() for l in open(os.path.join(FR, "index", "cell_order.txt")) if l.strip()]
     te_cells = [cells[i] for i in te]
-    assert [cells[i] for i in te] == [c for c in split["test_cells"]], "test 细胞顺序与 split.json 不一致"
+    assert [cells[i] for i in te] == [c for c in split["test_cells"]], "test-cell order does not match split.json"
     assert len(tr) == 636 and len(te) == 136
-    log("train %d / test %d 细胞（与原 Figure 6 划分一致）" % (len(tr), len(te)))
+    log("train %d / test %d cells (matching the original Figure 6 split)" % (len(tr), len(te)))
 
-    # --- 特征：训练集标准化 + PCA(100) ---
+    # --- features: training-set standardization + PCA(100) ---
     sc = StandardScaler().fit(X[tr])
     Ztr = sc.transform(X[tr]); Zte = sc.transform(X[te])
     pca = PCA(n_components=N_PC, random_state=0).fit(Ztr)
     Ktr = pca.transform(Ztr).astype(np.float64); Kte = pca.transform(Zte).astype(np.float64)
-    log("PCA100 训练集解释方差 %.3f" % pca.explained_variance_ratio_.sum())
+    log("PCA100 training-set explained variance %.3f" % pca.explained_variance_ratio_.sum())
 
     mtr = mask[tr]; mte = mask[te]
     preds, chosen = {}, {}
 
     def fit_ridge(Ytrain, tag):
-        # alpha 只用训练集的 5-fold CV 选（test 全程不参与）
+        # alpha chosen by 5-fold CV on the training set only (the test set never participates)
         kf = KFold(n_splits=5, shuffle=True, random_state=0)
         best, best_s = ALPHAS[0], -np.inf
         ytr = np.nan_to_num(Ytrain)
@@ -178,17 +178,17 @@ def main():
         mdl = Ridge(alpha=best).fit(Ktr, ytr)
         return mdl.predict(Kte), best
 
-    log("训练 Ridge: CERES 臂")
+    log("training Ridge: CERES arm")
     preds["ridge_CERES"], _ = fit_ridge(Ycer[tr], "ridge_CERES")
-    log("训练 Ridge: Chronos 臂")
+    log("training Ridge: Chronos arm")
     preds["ridge_Chronos"], _ = fit_ridge(Ychr[tr], "ridge_Chronos")
 
-    log("训练 Ridge: label-permutation 对照（打乱训练 Y 行标签）")
+    log("training Ridge: label-permutation control (shuffled training Y row labels)")
     rng = np.random.default_rng(SEED)
     perm = rng.permutation(len(tr))
     preds["ridge_perm"], _ = fit_ridge(Ycer[tr][perm], "ridge_perm")
 
-    # 冻结模型（既有 5-seed 平均，test 136 × 17393）
+    # frozen model (existing 5-seed average, test 136 x 17393)
     for arm, Ytag in [("ceres", "CERES"), ("chronos", "Chronos")]:
         acc = None
         for k in range(5):
@@ -197,7 +197,7 @@ def main():
             acc = a if acc is None else acc + a
         preds["frozen_%s" % Ytag] = (acc / 5.0).astype(np.float64)
 
-    # --- 训练集 per-gene 均值/标准差（只用 train 细胞） ---
+    # --- per-gene training mean/sd (train cells only) ---
     def prep_mu_sd(Y):
         mu = np.nanmean(np.where(mtr, Y[tr], np.nan), axis=0)
         sd = np.sqrt(np.nanmean(np.where(mtr, (Y[tr] - np.nan_to_num(mu, nan=0.0)) ** 2, np.nan), axis=0))
@@ -206,9 +206,9 @@ def main():
     MU_SD = {"CERES": prep_mu_sd(Ycer), "Chronos": prep_mu_sd(Ychr)}
     mu_cer, _ = MU_SD["CERES"]
     mu_chr, _ = MU_SD["Chronos"]
-    log("sanitize 后 mu/sd 全有限: %s" % all(np.isfinite(MU_SD[k][1]).all() for k in MU_SD))
+    log("mu/sd all finite after sanitize: %s" % all(np.isfinite(MU_SD[k][1]).all() for k in MU_SD))
 
-    # 常量基线：预测 = 训练集 per-gene 均值（对每个细胞同一向量）
+    # constant baseline: prediction = per-gene training mean (the same vector for every cell)
     preds["mean_baseline_CERES"] = np.tile(mu_cer, (len(te), 1))
     preds["mean_baseline_Chronos"] = np.tile(mu_chr, (len(te), 1))
 
@@ -219,11 +219,11 @@ def main():
             mu, sd = MU_SD[Ytag]
             r_raw, r_shift, r_z, agree = zres_stats(P, T, mte, mu, sd)
             rg, ns = corr_cols(P, T, mte)
-            # 逐细胞记录
+            # per-cell records
             for i, c in enumerate(te_cells):
                 res_cell.append(dict(model=tag, eval=Ytag, cell=c, n_genes=int(mte[i].sum()),
                                      r_raw=r_raw[i], r_shift=r_shift[i], r_zres=r_z[i]))
-            # 逐基因记录（只存 raw；across-cell 对 per-gene 仿射不变）
+            # per-gene records (raw only; across-cell is invariant to per-gene affine transforms)
             for g in range(len(rg)):
                 if np.isfinite(rg[g]):
                     res_gene.append(dict(model=tag, eval=Ytag, gene_idx=g, n_cells=int(ns[g]),
@@ -249,7 +249,7 @@ def main():
     with open(R("results", "model_metric_summary.csv"), "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(summary[0].keys())); w.writeheader(); w.writerows(summary)
 
-    # --- 2×2（训练靶标 × 评价参考），raw 与 zres 两口径 ---
+    # --- 2x2 (training target x evaluation reference), raw and zres calibers ---
     def cell2x2(M, Y, Ytag):
         T = Y[te]
         mu, sd = MU_SD[Ytag]
@@ -276,7 +276,7 @@ def main():
             % (name, cc_raw, ch_raw, hc_raw, hh_raw, grid[name]["interaction_raw"],
                grid[name]["interaction_shift"], grid[name]["interaction_zres"]))
 
-    # --- bootstrap：per-cell residualized 指标 + across-cell 指标 ---
+    # --- bootstrap: per-cell residualized metrics + across-cell metrics ---
     def cells_of(tag, ev, key):
         return ([r[key] for r in res_cell if r["model"] == tag and r["eval"] == ev],
                 [r["cell"] for r in res_cell if r["model"] == tag and r["eval"] == ev])
@@ -296,7 +296,7 @@ def main():
                "bootstrap": {k: {"point": v[0], "ci95": [v[1], v[2]],
                                  "excludes_zero": v[3]} for k, v in boot_out.items()}},
               open(R("results", "positive_control_summary.json"), "w"), indent=2)
-    log("完成，总耗时 %.0fs" % (time.time() - t0))
+    log("done, total %.0fs" % (time.time() - t0))
 
 
 if __name__ == "__main__":

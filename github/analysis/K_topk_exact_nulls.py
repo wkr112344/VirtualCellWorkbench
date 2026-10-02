@@ -1,5 +1,5 @@
 """K_topk_exact_nulls.py
-对 TableS20 每个 ranking panel，计算 beta(A) vs dcic(B) top-k 重叠相对超几何 null 的显著性。
+For each ranking panel in TableS20, compute the significance of the beta(A) vs dcic(B) top-k overlap against a hypergeometric null.
 observed overlap = |topA_k ∩ topB_k|；null = Hypergeometric(N, K=k, n=k)。
 """
 import csv, os
@@ -10,11 +10,11 @@ from math import erf, sqrt
 def _norm_cdf(x):
     return 0.5 * (1 + erf(x / sqrt(2)))
 
-PKG = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/补充材料'
+PKG = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/supplementary'
 RES = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/results'
 os.makedirs(RES, exist_ok=True)
 
-rows = list(csv.DictReader(open(f'{PKG}/TableS20_绝对topk_筛查排名.csv', encoding='utf-8-sig')))
+rows = list(csv.DictReader(open(f'{PKG}/TableS20_absolute_topk_screening_rank.csv', encoding='utf-8-sig')))
 cols = list(rows[0].keys())
 rank_cols = [c for c in cols if c.startswith('rank_') and (c.endswith('_A') or c.endswith('_B'))]
 bases = {}

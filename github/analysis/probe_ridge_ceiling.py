@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-probe_ridge_ceiling.py — 用强线性基线(岭回归)测「特征天花板」。
+probe_ridge_ceiling.py -- measure the "feature ceiling" with a strong linear baseline (ridge regression).
 
-目的：区分「PRnet 太弱/损失不对」(模型问题) 与 「这些特征本身对 Y 无可学信号」(特征/目标问题)。
-如果连岭回归(对线性信号很强的正则化估计器)在 val 上 val_mse 都 ~1.0(=预测边际均值)，
-说明特征里根本没有可泛化的 X->Y 映射，加强 PRnet 也没用 —— 根因在上游(特征/目标)。
+Purpose: distinguish "PRnet too weak / wrong loss" (a model problem) from "these features carry no learnable signal for Y" (a feature/target problem).
+If even ridge regression (a regularized estimator strong on linear signal) has val_mse ~ 1.0 on val (= predicting the marginal mean),
+then there is simply no generalizable X->Y mapping in the features, and strengthening PRnet will not help -- the root cause is upstream (features/target).
 
-直接用与训练脚本完全一致的：(X_baseline, drug_emb, dose_z, time_z) 拼成特征，目标 Y_beta / Y_dcic。
-为省内存只在子集上跑。val_mse 与训练脚本同口径（z-scored 目标方差≈1，地板=1.0）。
+Features are built exactly as in the training script: (X_baseline, drug_emb, dose_z, time_z), with targets Y_beta / Y_dcic.
+To save memory it runs on a subset only. val_mse uses the same caliber as the training script (z-scored target variance ~ 1, floor = 1.0).
 """
 import os, sys, time
 import h5py
@@ -55,7 +55,7 @@ tr = np.where(split == 0)[0]; va = np.where(split == 1)[0]
 rng = np.random.default_rng(2024)
 tr = rng.choice(tr, min(N_TRAIN, len(tr)), replace=False)
 va = rng.choice(va, min(N_VAL, len(va)), replace=False)
-tr = np.sort(tr); va = np.sort(va)   # h5py 要求 fancy index 升序
+tr = np.sort(tr); va = np.sort(va)   # h5py requires fancy indices in ascending order
 
 with h5py.File(DATA, "r") as f:
     Xtr = build_feat(f, tr, dose_z, time_z); Xva = build_feat(f, va, dose_z, time_z)
@@ -71,9 +71,9 @@ for name, Ytr, Yva in [("Y_beta", Yb_tr, Yb_va), ("Y_dcic", Yd_tr, Yd_va)]:
     mse = float(np.mean((pred - Yva)**2))
     sp = per_sample_corr(pred, Yva, "spearman")
     pe = per_sample_corr(pred, Yva, "pearson")
-    # 边际均值预测基线
+    # marginal-mean prediction baseline
     base_mse = float(np.mean((Ytr.mean(0, keepdims=True) - Yva)**2))
-    print(f"[{name}] ridge val_mse={mse:.4f}  (边际均值基线 mse={base_mse:.4f})  "
+    print(f"[{name}] ridge val_mse={mse:.4f}  (marginal-mean baseline mse={base_mse:.4f})  "
           f"mean per-sample sp={np.nanmean(sp):+.4f} pe={np.nanmean(pe):+.4f}  ({time.time()-t1:.1f}s)")
 
 print(f"[done] total {time.time()-t0:.1f}s")

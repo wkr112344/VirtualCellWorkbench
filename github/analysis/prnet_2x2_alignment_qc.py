@@ -2,21 +2,21 @@
 """
 prnet_2x2_alignment_qc.py  (PRnet symmetric 2x2 — pre-training alignment QC gate)
 
-目的：在真正用 dcic2021 (cp_coeff_mat.gctx) 训练第二个 PRnet 之前，先验证
-LINCS L1000 h5ad (beta2020, PRnet 训练数据) 的每条扰动样本能否可靠对齐到
-dcic2021 GCTX 的 signature。只有 QC 全过，才进入训练。
+Purpose: before actually training a second PRnet on dcic2021 (cp_coeff_mat.gctx), first verify whether
+each perturbation sample of the LINCS L1000 h5ad (beta2020, PRnet training data) can be reliably aligned to
+a dcic2021 GCTX signature. Training proceeds only if all QC checks pass.
 
-对齐键（perturbation）： (cell, pert_id, dose, time)
-对齐键（control）      ： (cell, DMSO)   —— dcic 用 pert_name=='DMSO' 标记对照
+Alignment key (perturbation): (cell, pert_id, dose, time)
+Alignment key (control)      : (cell, DMSO)   -- dcic marks controls with pert_name=='DMSO'
 
-检查项（用户清单）：
-  1. 匹配成功样本数
-  2. 匹配失败比例
-  3. 978 landmark gene 是否全部齐
-  4. gene order 是否一致（输出强制按 h5ad var 顺序重排）
-  5. 每个 cell/drug/dose/time 是否唯一（双方）
-  6. 是否存在重复 signature（dcic 内）
-  7. 是否和 G2CP S25 的 evaluation pair 定义一致
+Checks (requested list):
+  1. number of successfully matched samples
+  2. unmatched fraction
+  3. whether all 978 landmark genes are present
+  4. whether the gene order matches (output forced to the h5ad var order)
+  5. whether each cell/drug/dose/time is unique (both sides)
+  6. whether duplicate signatures exist (within dcic)
+  7. whether this matches the G2CP S25 evaluation-pair definition
 """
 import h5py, numpy as np, scanpy as sc, re, json, os
 from collections import Counter, defaultdict
@@ -29,7 +29,7 @@ os.makedirs(OUT, exist_ok=True)
 
 def dec(x): return x.decode() if isinstance(x, bytes) else x
 def sf(x, n=4):
-    """4 位有效数字，用于 dose/time 的容差比较。"""
+    """4 significant digits, used for tolerant dose/time comparison."""
     try:
         x = float(x)
         if x == 0 or not np.isfinite(x): return 0.0

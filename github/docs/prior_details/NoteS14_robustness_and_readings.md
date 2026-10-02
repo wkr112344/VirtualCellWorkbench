@@ -1,49 +1,94 @@
-# 补充材料 S14：LINCS 跨参考产品稳健性与对齐检查
+# Supplementary Material S14: LINCS cross-reference-product robustness and alignment checks
 
-本文件仅保留当前 GigaScience 稿件直接使用的跨 reference 检查。旧版中与 LayerDiag、癌/非癌分层、CPI、遗传扰动或其他已退出当前主线的内容已从投稿包移除。
+This file retains only the cross-reference checks used directly by the current GigaScience manuscript. Content from
+the old version relating to LayerDiag, cancer/non-cancer stratification, CPI, genetic perturbation, or other
+material that has left the main line has been removed from the submission package.
 
-## S14.1 主固定输出比较
+## S14.1 Main fixed-output comparison
 
-在同一 beta-trained frozen prediction、同一 64 个共同细胞系、同一 11,275 个共同 `(cell line, drug)` 对和同一评分协议下，MODZ-based level5beta2020 的逐样本 PCC 为 0.3680，CD-based dcic2021 为 0.0724，`Δ_ref = +0.2956`。该差值是完整 data-product replacement contrast，不解释为某个单一预处理步骤的因果效应。
+With the same beta-trained frozen prediction, the same 64 common cell lines, the same 11,275 common
+`(cell line, drug)` pairs, and the same scoring protocol, the per-sample PCC is 0.3680 for MODZ-based
+level5beta2020 and 0.0724 for CD-based dcic2021, giving `Δ_ref = +0.2956`. This difference is a full
+data-product replacement contrast and is not interpreted as the causal effect of any single preprocessing step.
 
-## S14.2 训练暴露检查
+## S14.2 Training-exposure check
 
-2,037 个受控排名候选中，192 个药物在两臂当前可追溯的适配训练数据中均未出现，其 `ΔPCC = +0.2289`。进一步排除药物 ID 已见或任一训练侧存在完全相同 ECFP4 指纹后，55 个 fingerprint-clean 药物的 `ΔPCC = +0.3118`。这些结果说明主差异不能由当前可追溯适配训练中的直接药物暴露或完全相同指纹单独解释；更早 base checkpoint 的训练组成不完整，因此不作更强外推。逐药底表见 S22。
+Among the 2,037 controlled ranking candidates, 192 drugs appear in neither arm's currently traceable fine-tuning
+training data, with `ΔPCC = +0.2289`. After further excluding drugs whose drug ID has been seen or that have an
+exactly identical ECFP4 fingerprint on either training side, the 55 fingerprint-clean drugs have
+`ΔPCC = +0.3118`. These results show that the main difference cannot be explained by direct drug exposure or by
+identical fingerprints in the currently traceable fine-tuning training alone; the earlier base checkpoint's training
+composition is incomplete, so no stronger extrapolation is made. The per-drug table is in S22.
 
-## S14.3 药物排序与疾病签名短名单
+## S14.3 Drug ranking and disease-signature shortlists
 
-对 2,037 个候选药物的性能排序，跨产品 Spearman = 0.5675，arm A top-10% 在 arm B 的保留率为 59.80%，Jaccard = 0.4266；但 arm A top-10% 中有 12.25% 在 arm B 掉出 top-50%。在 1,399 个共同可评药物上，三条疾病方向性签名的跨产品 Spearman 为 0.498–0.540，top-10% 保留率为 33.6%–42.9%，说明 global rank stability 与 top-k/shortlist stability 不是同一层面的量。排名底表见 S20。
+For the performance ranking of the 2,037 candidate drugs, the cross-product Spearman = 0.5675, the arm-A top-10%
+retention rate in arm B is 59.80%, and Jaccard = 0.4266; however, 12.25% of the arm-A top-10% fall out of the arm-B
+top-50%. On the 1,399 commonly evaluable drugs, the cross-product Spearman of the three disease-directional
+signatures is 0.498–0.540 and the top-10% retention rate is 33.6%–42.9%, showing that global rank stability and
+top-k/shortlist stability are not the same thing. The ranking table is in S20.
 
-## S14.4 七个已发表预测器的固定输出复评
+## S14.4 Fixed-output re-evaluation of seven published predictors
 
-正文 Figure 3 固定 CIGER、DeepCE、MultiDCP、PertDiT、PRnet、TranSiGen 和 XPert 的既有 prediction matrices，只替换对应 Level-5 reference。七个预测器的 paired `ΔPCC` 方向一致，中位数 0.3993，范围 0.2599–0.6450，各自 bootstrap 95% CI 下界均高于 0。逐模型可复核工件位于正文对应的冻结 Zenodo version of record；当前本地投稿包未重复复制大型中间矩阵。
+Figure 3 of the main text holds fixed the existing prediction matrices of CIGER, DeepCE, MultiDCP, PertDiT, PRnet,
+TranSiGen, and XPert, replacing only the corresponding Level-5 reference. The seven predictors show a consistent
+direction of paired `ΔPCC`, with median 0.3993 and range 0.2599–0.6450, and every bootstrap 95% CI lower bound
+above 0. The per-model checkable artifacts are in the corresponding frozen Zenodo version of record; this local
+submission package does not duplicate the large intermediate matrices.
 
-## S14.5 解释边界
+## S14.5 Interpretation boundary
 
-LINCS 的跨产品差异可能同时包含 signature estimation、normalization、replicate aggregation、quality control、dynamic range、measurement repeatability 与 processed-construct definition 等因素。当前设计没有 within-product test-retest 或 technical-replicate noise baseline，因此不进一步拆分这些来源。
+The cross-product difference in LINCS may simultaneously include signature estimation, normalization, replicate
+aggregation, quality control, dynamic range, measurement repeatability, and processed-construct definition. The
+current design has no within-product test-retest or technical-replicate noise baseline, so these sources are not
+further decomposed.
 
-## S14.6 数据源层：共同签名的内容差异与常见变换检查
+## S14.6 Data-source layer: content differences of the common signatures and common-transformation checks
 
-两套 Level-5 产品的 signature-key overlap 为 99.61%，但正文 11,275 个共同可评响应在 978 个 LINCS landmark genes 上的逐行 Pearson 相关中位数仅为 0.4172。为排查键对齐和简单数值变换造成的假象，我们在共享 signature-id 的原始发布矩阵上重新对齐条件名和基因，得到逐行 Pearson 中位数 0.4262、cosine 中位数 0.4224，与主分析同量级。逐行 z-score、正缩放、逐基因中心化/z 化和逐基因标定均未消除主要结构差异。
+The two Level-5 products have a signature-key overlap of 99.61%, yet the 11,275 common evaluable responses in the
+main text have a median per-row Pearson correlation of only 0.4172 across the 978 LINCS landmark genes. To rule out
+artifacts from key alignment and simple numerical transforms, we realigned condition names and genes on the original
+release matrices sharing signature IDs, obtaining a median per-row Pearson of 0.4262 and a median cosine of 0.4224,
+the same order of magnitude as the main analysis. Per-row z-scoring, positive scaling, per-gene centering/z-scoring,
+and per-gene calibration all failed to remove the main structural difference.
 
-这些检查只能说明差异不是由所检验的简单对齐/变换问题单独造成；MODZ 与 Characteristic Direction 的生成谱系包含多项差异，本文不将 `Δ_ref` 唯一归因于 normalization、replicate aggregation、quality control 或任何单一算法步骤。
+These checks only show that the difference is not caused solely by the simple alignment/transformation issues tested;
+the generative lineages of MODZ and Characteristic Direction involve several differences, and this paper does not
+attribute `Δ_ref` uniquely to normalization, replicate aggregation, quality control, or any single algorithmic step.
 
-## S14.7 基因面板敏感性
+## S14.7 Gene-panel sensitivity
 
-将评分基因面板切换为 978 个 LINCS landmark genes 后，绝对 `ΔPCC` 增大，同时 top-10% 重合率提高。该结果说明绝对性能差异与排名稳定性可以呈现不同方向的变化，因此正文同时报告 score shift 与 rank/top-k 指标。
+Switching the scoring gene panel to the 978 LINCS landmark genes increases the absolute `ΔPCC` while also raising
+the top-10% overlap. This shows that absolute performance differences and rank stability can move in different
+directions, so the main text reports both score-shift and rank/top-k metrics.
 
-## S14.8 共同集合敏感性
+## S14.8 Common-set sensitivity
 
-正文 2×2 使用与主结果完全对齐的 11,275 对；另在 `E_common = 15,990` 的更大共同集合上重复，interaction 方向一致但绝对数值不同。两套结果分别报告，避免把集合变化与 reference replacement 混在同一个效应量中。完整结果见 S25。
+The main-text 2×2 uses the 11,275 pairs fully aligned with the main result; it is also repeated on the larger common
+set `E_common = 15,990`, where the interaction direction is consistent but the absolute values differ. The two
+results are reported separately to avoid mixing set changes into the same effect size as the reference replacement.
+Full results are in S25.
 
-## S14.9 其他扰动转录组资源的可对齐性检查
+## S14.9 Alignability check of other perturbation-transcriptome resources
 
-我们评估了 GSE70138、CPJUMP1 等资源是否能够提供与 LINCS 主分析相同任务、同终点、且可在同一评分单元上构造第二套已发布 processed reference product。现有材料未提供可完成同类受控复制的组合，因此本文不把这些资源作为等价 replication；跨数据生态检验转向 DepMap CRISPR gene-effect products（S23）。
+We assessed whether resources such as GSE70138 and CPJUMP1 can provide the same task, the same endpoint, and a second
+published processed reference product constructible on the same scoring unit as the main LINCS analysis. The available
+material does not provide a combination that supports the same kind of controlled replication, so this paper does not
+treat these resources as an equivalent replication; the cross-ecosystem test turns instead to DepMap CRISPR
+gene-effect products (S23).
 
-## S14.10 matched 2×2 对主固定输出结果的解释
+## S14.10 Interpretation of the main fixed-output result by the matched 2×2
 
-与 11,275 对主 fixed-output comparison 完全对齐的 2×2 结果为：beta-trained 的 reference contrast `+0.2956`，dcic-trained 的 reference contrast `+0.0171`，difference-in-differences interaction `+0.2785 [0.2741, 0.2828]`。两种训练状态下的 reference contrast 明显不同，因此正文将结果表述为 reference-product sensitivity 与 training–evaluation target matching 密切相关，而不是固定不变的“产品效应”。完整四格和更大共同集合敏感性见 S25。
+Fully aligned with the 11,275-pair main fixed-output comparison, the 2×2 gives: beta-trained reference contrast
+`+0.2956`, dcic-trained reference contrast `+0.0171`, difference-in-differences interaction
+`+0.2785 [0.2741, 0.2828]`. The reference contrast differs markedly between the two training states, so the main text
+frames the result as reference-product sensitivity being closely tied to training–evaluation target matching, rather
+than as a fixed "product effect". The full four cells and the larger common-set sensitivity are in S25.
 
-## S14.11 结果解释与报告口径
+## S14.11 Interpretation and reporting caliber
 
-本稿按 comparative benchmark robustness / reproducibility study 解释结果。LINCS 的整体药物排序保留中等结构，但 top-k 与 disease-signature shortlist 更敏感；DepMap 中 CERES/Chronos 全局高度一致，固定 DeepDEP prediction 的 performance reading 与 top-k recovery 仍有较小但可测量的变化。DepMap 因而提供跨数据生态的现象复现，而不是对 LINCS 具体效应量的直接复制。
+This manuscript interprets its results as a comparative benchmark robustness / reproducibility study. The overall
+drug ranking in LINCS retains moderate structure, but top-k and disease-signature shortlists are more sensitive; in
+DepMap, CERES/Chronos are globally highly consistent, yet the performance reading and top-k recovery of the fixed
+DeepDEP prediction still change by a small but measurable amount. DepMap thus provides a cross-ecosystem reproduction
+of the phenomenon, not a direct replication of LINCS's specific effect size.

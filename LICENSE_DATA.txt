@@ -1,3 +1,4 @@
-【待作者确认】数据/图件许可建议：CC-BY-4.0（派生产物可再分发；
-第三方原始数据仍遵循原许可，见 DATA_SOURCES.md）。
-选定后在 Zenodo 记录里选择对应许可。
+[TO BE CONFIRMED BY THE AUTHORS] Suggested data/figure license: CC-BY-4.0 (derived
+products may be redistributed; third-party raw data remains under its original
+license, see DATA_SOURCES.md). Once chosen, select the corresponding license on
+the Zenodo record.

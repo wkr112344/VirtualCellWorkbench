@@ -1,23 +1,23 @@
 """J_expand_existing_signature_panel.py
-基于 补充材料/TableS20_绝对topk_筛查排名.csv 的现有 ranking 列，
-系统化计算各 signature/disease panel 在 beta(A) vs dcic(B) 两套参考下的 rank 稳定性。
+Based on the existing ranking columns of supplementary/TableS20_absolute_topk_screening_rank.csv,
+systematically compute the rank stability of each signature/disease panel under the two references beta(A) vs dcic(B).
 """
 import csv, os
 import numpy as np
 from scipy.stats import spearmanr, kendalltau
 
-PKG = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/补充材料'
+PKG = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/supplementary'
 RES = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/results'
 os.makedirs(RES, exist_ok=True)
 
-rows = list(csv.DictReader(open(f'{PKG}/TableS20_绝对topk_筛查排名.csv', encoding='utf-8-sig')))
+rows = list(csv.DictReader(open(f'{PKG}/TableS20_absolute_topk_screening_rank.csv', encoding='utf-8-sig')))
 cols = list(rows[0].keys())
 rank_cols = [c for c in cols if c.startswith('rank_') and (c.endswith('_A') or c.endswith('_B'))]
 bases = {}
 for c in rank_cols:
     base = c[:-2]
     bases.setdefault(base, {})[c[-1]] = c
-# 只保留同时存在 A/B 的 base
+# keep only bases that have both A and B
 pairs = {b: v for b, v in bases.items() if 'A' in v and 'B' in v}
 
 N = len(rows)

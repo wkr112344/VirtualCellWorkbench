@@ -1,4 +1,4 @@
-# 按用户点名的文件名打包交付物（从现产物生成/对齐），输出到 deliverables/
+# Package deliverables under the requested file names (generated/aligned from current outputs), written to deliverables/
 import json, csv, os, shutil
 D = "deliverables"; os.makedirs(D, exist_ok=True)
 J = lambda *a: json.load(open(os.path.join(*a), encoding="utf-8"))
@@ -81,7 +81,7 @@ out3 = {
 }
 json.dump(out3, open(os.path.join(D, "alignment_split_summary.json"), "w", encoding="utf-8"), indent=2)
 
-# ---- 图与逐样本分数 ----
+# ---- figures and per-sample scores ----
 shutil.copyfile("figures/fig1_score_distributions.png", os.path.join(D, "fig_reference_agreement.png"))
 shutil.copyfile("figures/fig2_2x2_interaction.png", os.path.join(D, "fig_2x2_heatmap.png"))
 shutil.copyfile("results/per_sample_scores.csv", os.path.join(D, "per_sample_scores.csv"))
@@ -101,6 +101,6 @@ with open(os.path.join(D, "sample_split.csv"), "w", newline="", encoding="utf-8"
         split = "train" if s in train_s else ("test" if s in test_s else "unused")
         w.writerow([s, t["donor"], t["SMTSD"], split])
 
-print("生成完毕:")
+print("generated:")
 for f in sorted(os.listdir(D)):
     print("  %-32s %9.1f KB" % (f, os.path.getsize(os.path.join(D, f)) / 1024))

@@ -22,7 +22,7 @@ import pandas as pd
 
 ROOT = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5'
 RES = os.path.join(ROOT, 'results')
-SRC = os.path.join(ROOT, '图源数据')
+SRC = os.path.join(ROOT, 'figure_source_data')
 GH_TMP = os.path.join(RES, '__gh_tmp')
 OUT = os.path.join(RES, 'for_figures')
 os.makedirs(OUT, exist_ok=True)

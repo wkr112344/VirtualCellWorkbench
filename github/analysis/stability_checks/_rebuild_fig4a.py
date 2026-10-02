@@ -1,6 +1,6 @@
-"""重建 55point 版 Figure 4A（v2）：去掉箭头标注，图例移到坐标轴下方，避免与曲线相压。
+"""Rebuild the 55point version of Figure 4A (v2): remove arrow annotations, move the legend below the axes to avoid overlapping the curves.
 
-数据：终版补充表 S17（full 集合的 within-beta / within-dcic 均值与 2.5/97.5 分位）+ 观察跨参考重合。
+Data: final Supplementary Table S17 (full-set within-beta / within-dcic means and 2.5/97.5 quantiles) + observed cross-reference overlap.
 """
 import pandas as pd
 import matplotlib
@@ -41,4 +41,4 @@ ax.legend(frameon=False, fontsize=6.8, ncol=2, loc="upper center",
           bbox_to_anchor=(0.5, -0.27), columnspacing=1.6, handletextpad=0.5)
 fig.savefig(OUT / "Figure4_A_retention_vs_within_reference_stability.pdf")
 fig.savefig(OUT / "Figure4_A_retention_vs_within_reference_stability.png")
-print("Figure 4A（v2）已重建：去箭头、图例移到轴下方")
+print("Figure 4A (v2) rebuilt: arrows removed, legend moved below the axes")

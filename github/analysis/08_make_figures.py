@@ -1,6 +1,6 @@
-# 08 出图（模板已就绪，数字由 results/ 自动填充）
-#   fig1: RNASeQC vs RSEM（逐样本分数 agreement 分布 + 两参考逐基因一致性的分布）
-#   fig2: 2×2 heatmap + interaction 点估计与 bootstrap CI
+# 08 Make figures (template ready; numbers auto-filled from results/)
+#   fig1: RNASeQC vs RSEM (distribution of per-sample score agreement + per-gene agreement between the two references)
+#   fig2: 2x2 heatmap + interaction point estimate and bootstrap CI
 import os, sys, json, csv
 import numpy as np
 import matplotlib
@@ -14,7 +14,7 @@ rows = list(csv.DictReader(open(p("results", "per_sample_scores.csv"), encoding=
 boot = json.load(open(p("results", "bootstrap.json")))
 grid = json.load(open(p("metadata", "common_grid.json")))
 
-# --- fig1: 逐样本 reference agreement（跨基因 Pearson 的分布：样本对两参考的分数） ---
+# --- fig1: per-sample reference agreement (distribution of across-gene Pearson vs the two references) ---
 fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
 for ax, pre, ttl in [(axes[0], "", "Pearson (primary)"), (axes[1], "sp_", "Spearman (secondary)")]:
     for key, c, lbl in [(pre+"rRR", "#1f77b4", "RNASeQC pred × RNASeQC"),

@@ -39,7 +39,7 @@ def row_pearson(Pm, T):
 
 
 # 1. design reconstruction (verbatim from P_frozen_multimetric_cohorts.py)
-log("构建设计集 ...")
+log("building the design set ...")
 pmB = np.load(os.path.join(D_21, "pairs_meta.npz"), allow_pickle=True)
 b_cell = np.array([str(x) for x in pmB["cell_name"]], dtype=object)
 b_drug = np.array([str(x) for x in pmB["drug_id"]], dtype=object)
@@ -62,8 +62,8 @@ b_pairs = set(zip(b_cell.tolist(), b_drug.tolist()))
 Pstar = sorted(p for p in (r_pairs & b_pairs) if p[0] in Cs_set and p[1] in H)
 nP = len(Pstar)
 pidx = {p: i for i, p in enumerate(Pstar)}
-log("设计 C*=%d D*=%d H=%d P*=%d" % (len(Cstar), len(Dstar), len(H), nP))
-assert (len(Cstar), len(Dstar), len(H), nP) == (64, 20370, 2037, 11275), "设计≠归档口径，中止"
+log("design C*=%d D*=%d H=%d P*=%d" % (len(Cstar), len(Dstar), len(H), nP))
+assert (len(Cstar), len(Dstar), len(H), nP) == (64, 20370, 2037, 11275), "design != archived caliber; aborting"
 
 P_cells = np.array([p[0] for p in Pstar], dtype=object)
 P_drugs = np.array([p[1] for p in Pstar], dtype=object)
@@ -86,7 +86,7 @@ def pair_level_978(d, cell, drug, tag):
         T[tgt[s0:s0 + CH]] = v[:, internal_col]
         del v
     del Y
-    log("  %s: 命中 %d 行 -> T%s" % (tag, len(sel), T.shape))
+    log("  %s: %d rows matched -> T%s" % (tag, len(sel), T.shape))
     return T
 
 
@@ -94,9 +94,9 @@ pmB2 = np.load(os.path.join(D_B2, "pairs_meta.npz"), allow_pickle=True)
 b2_cell = np.array([str(x) for x in pmB2["cell_name"]], dtype=object)
 b2_drug = np.array([str(x) for x in pmB2["drug_id"]], dtype=object)
 
-log("读取 T_A = cache_beta_v2 (level5beta2020) ...")
+log("reading T_A = cache_beta_v2 (level5beta2020) ...")
 T_A = pair_level_978(D_B2, b2_cell, b2_drug, "A")
-log("读取 T_B = cache_2021 (dcic2021) ...")
+log("reading T_B = cache_2021 (dcic2021) ...")
 T_B = pair_level_978(D_21, b_cell, b_drug, "B")
 
 # 4. frozen prediction matrices (already archived)
@@ -105,7 +105,7 @@ P_dcic = np.load(os.path.join(OUT, "frozen_pred_matrix_dcic_trained_11275x978.np
 log("P_beta %s  P_dcic %s" % (P_beta.shape, P_dcic.shape))
 
 # 5. per-row scores for the 2x2
-log("逐行打分 ...")
+log("scoring row by row ...")
 out = pd.DataFrame({
     "cell": P_cells,
     "drug": P_drugs,
@@ -121,7 +121,7 @@ ref = pd.read_csv(os.path.join(OUT, "for_figures", "C_perdrug_stability.csv"))
 g = out.groupby("drug")[["beta_trained__beta2020", "beta_trained__dcic2021",
                          "dcic_trained__beta2020", "dcic_trained__dcic2021"]].mean()
 m = g.join(ref.set_index("drug_id")[["pcc_beta", "pcc_dcic"]], how="inner")
-log("  对上的药物数: %d / %d" % (len(m), len(ref)))
+log("  drugs matched: %d / %d" % (len(m), len(ref)))
 assert len(m) == 2037
 for mine, refc in [("beta_trained__beta2020", "pcc_beta"),
                    ("beta_trained__dcic2021", "pcc_dcic")]:
@@ -130,11 +130,11 @@ for mine, refc in [("beta_trained__beta2020", "pcc_beta"),
     assert diff.max() < 1e-3, "per-drug mismatch: " + mine
 gm_dcic_b = g["dcic_trained__beta2020"].mean()
 gm_dcic_d = g["dcic_trained__dcic2021"].mean()
-log("  dcic_trained__beta2020 逐药均值 = %.6f (归档 0.1705)" % gm_dcic_b)
-log("  dcic_trained__dcic2021 逐药均值 = %.6f (归档 0.1534)" % gm_dcic_d)
-assert abs(gm_dcic_b - 0.1705) < 5e-4 and abs(gm_dcic_d - 0.1534) < 5e-4, "dcic-trained 聚合不符"
+log("  dcic_trained__beta2020 per-drug mean = %.6f (archived 0.1705)" % gm_dcic_b)
+log("  dcic_trained__dcic2021 per-drug mean = %.6f (archived 0.1534)" % gm_dcic_d)
+assert abs(gm_dcic_b - 0.1705) < 5e-4 and abs(gm_dcic_d - 0.1534) < 5e-4, "dcic-trained aggregation mismatch"
 
 os.makedirs(DEST, exist_ok=True)
 dest = os.path.join(DEST, "frozen_multimetric_perrow_scores.csv")
 out.to_csv(dest, index=False)
-log("已写出 %s（%d 行）" % (dest, len(out)))
+log("wrote %s (%d rows)" % (dest, len(out)))

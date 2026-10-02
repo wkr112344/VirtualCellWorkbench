@@ -1,16 +1,16 @@
 """M_negative_controls_summary.py
-基于 TableS20 的 ranking 列做 label-permutation 负对照：
-对每个 panel，observed = mean|rank_A - rank_B|；null = 打乱 B 列的 drug 顺序后重算，
-1000 次置换得到经验 p（observed 相对 null 是否异常）。
+A label-permutation negative control on the ranking columns of TableS20:
+for each panel, observed = mean|rank_A - rank_B|; null = recompute after shuffling the drug order of column B,
+with 1,000 permutations giving an empirical p (whether observed is unusual relative to the null).
 """
 import csv, os
 import numpy as np
 
-PKG = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/补充材料'
+PKG = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/supplementary'
 RES = 'C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/results'
 os.makedirs(RES, exist_ok=True)
 
-rows = list(csv.DictReader(open(f'{PKG}/TableS20_绝对topk_筛查排名.csv', encoding='utf-8-sig')))
+rows = list(csv.DictReader(open(f'{PKG}/TableS20_absolute_topk_screening_rank.csv', encoding='utf-8-sig')))
 cols = list(rows[0].keys())
 rank_cols = [c for c in cols if c.startswith('rank_') and (c.endswith('_A') or c.endswith('_B'))]
 bases = {}

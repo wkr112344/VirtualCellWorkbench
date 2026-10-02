@@ -11,7 +11,7 @@ Faithful port of step 1 of p4c_run_A_2x2.py (the manuscript 2x2 runner):
             with cell in C* and drug in H
     assert (64, 20370, 2037, 11275) == (|C*|, |D*|, |H|, |P*|)
 
-The (cell, drug) pair LIST is gene-axis agnostic; PRnet "完整 A" uses the 969
+The (cell, drug) pair LIST is gene-axis agnostic; PRnet "full set A" uses the 969
 axis but reuses this identical pair set so the eval is comparable to S25.
 
 We then verify every P* pair is also present in the two EVAL caches
@@ -95,7 +95,7 @@ def main():
         n_heldout_drugs_H=len(H), n_eval_pairs_Pstar=len(Pstar),
         eval_arm_beta='g2cp_cache_beta_v2', eval_arm_dcic='g2cp_cache_2021',
         coverage_in_beta_v2=n_in_b2, coverage_in_2021=n_in_21,
-        note='gene-axis agnostic; PRnet 完整 A reuses this identical 11,275 (cell,drug) set on the 969 axis.',
+        note='gene-axis agnostic; PRnet full set A reuses this identical 11,275 (cell,drug) set on the 969 axis.',
         elapsed_s=round(time.time() - t0, 1),
     )
     json.dump(meta, open(os.path.join(OUT, 'common_eval_pairs.json'), 'w'), indent=1)

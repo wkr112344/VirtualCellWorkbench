@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-plot_multiseed_2x2.py — 给 LINCS PRnet 受控 2×2 多 seed 研究画图。
-读 PRnet_commonX_train_eval_multiseed.py 的产物：
-  - multiseed_2x2_summary.csv  (每 seed 的四格 + interaction)
+plot_multiseed_2x2.py — figures for the LINCS PRnet controlled 2x2 multi-seed study.
+Reads the outputs of PRnet_commonX_train_eval_multiseed.py:
+  - multiseed_2x2_summary.csv  (per-seed four cells + interaction)
   - multiseed_bootstrap.npz     (hierarchical_interaction_spearman/pearson, per_seed_interaction)
-输出 for_figures/figures/ 下的 G/H 风格森林图 + bootstrap 直方图。
+Writes G/H-style forest plots + bootstrap histograms under for_figures/figures/.
 
-须用含 matplotlib 的 python 运行（dpb311）。
+Must be run with a python that has matplotlib (dpb311).
 """
 import os
 import numpy as np
@@ -35,7 +35,7 @@ def main():
     rep_pe = z['hierarchical_interaction_pearson']
     med = float(np.median(rep_sp)); lo, hi = np.percentile(rep_sp, [2.5, 97.5])
 
-    # ---------- 森林图 + bootstrap 直方图 ----------
+    # ---------- forest plot + bootstrap histogram ----------
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.2))
     ax = axes[0]
     ys = np.arange(len(sumdf))
@@ -64,7 +64,7 @@ def main():
     plt.close(fig)
     print('saved', p)
 
-    # ---------- 四格 heatmap (spearman, per seed) ----------
+    # ---------- four-cell heatmap (spearman, per seed) ----------
     cells = ['BB_sp', 'BD_sp', 'DB_sp', 'DD_sp']
     labels = ['BB', 'BD', 'DB', 'DD']
     mat = sumdf[cells].values.astype(float)

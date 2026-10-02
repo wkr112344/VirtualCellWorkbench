@@ -365,7 +365,7 @@ panel(ax, "B", "Top-10 union rank flow")
 
 # C shortlist membership matrix (Global + 3 disease contexts; hallmark shortlists
 # are not part of the package)
-sl = pd.read_csv(r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/图源数据/TableS_disease_top10_shortlist.csv")
+sl = pd.read_csv(r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/figure_source_data/TableS_disease_top10_shortlist.csv")
 g10 = perdrug[perdrug.in_top10_beta][["drug_id", "rank_beta"]].rename(columns={"rank_beta": "Global"})
 SIGS = [("ACEVEDO_LIVER_TUMOR_VS_NORMAL_ADJACENT_TISSUE", "Liver"),
         ("RODRIGUES_THYROID_CARCINOMA_ANAPLASTIC", "Thyroid"),

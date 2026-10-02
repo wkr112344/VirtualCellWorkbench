@@ -1,10 +1,10 @@
-# 06 打 2×2 分（预注册口径，主判据）
-#   空间: log2(TPM+1)，全部共同基因
-#   分数: 每 test 样本跨基因 Pearson（主）/ Spearman（次） between 预测向量 与 样本向量
-#   四格: rRR(RNASeQC predictor × RNASeQC ref) rRE(RNASeQC pred × RSEM ref)
+# 06 Compute the 2x2 scores (pre-registered caliber, main criterion)
+#   space: log2(TPM+1), all common genes
+#   score: per test sample, across-gene Pearson (primary) / Spearman (secondary) between the prediction vector and the sample vector
+#   four cells: rRR (RNASeQC predictor x RNASeQC ref)  rRE (RNASeQC pred x RSEM ref)
 #          rER(RSEM pred × RNASeQC ref)        rEE(RSEM pred × RSEM ref)
 #   interaction = (rRR - rRE) - (rER - rEE)
-# 输出 results/per_sample_scores.csv + results/score_summary.json
+# Output results/per_sample_scores.csv + results/score_summary.json
 import os, sys, json, time
 import numpy as np
 from scipy.stats import rankdata
@@ -34,11 +34,11 @@ sidx = {s: i for i, s in enumerate(samples)}
 rows = []
 t0 = time.time()
 te = splits["test_samples"]
-log("test 样本 %d，开始逐样本打分" % len(te))
+log("%d test samples; scoring sample by sample" % len(te))
 for i, s in enumerate(te):
     ia, ib = sidx[s], sidx[s]
     tissue = tmap[s][lab]
-    # 每 product：log2 样本向量 与 log2 组织均值预测向量
+    # per product: the log2 sample vector and the log2 tissue-mean prediction vector
     va = np.log2(np.asarray(A[ia], dtype=np.float64) + 1.0)
     vb = np.log2(np.asarray(B[ib], dtype=np.float64) + 1.0)
     pa = pred_vec("rnaseqc", tissue).astype(np.float64)

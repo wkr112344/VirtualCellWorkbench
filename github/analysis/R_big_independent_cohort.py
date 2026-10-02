@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-R_big_independent_cohort.py —— 以「独立 cohort」为核心的大实验（双生态统一）
+R_big_independent_cohort.py -- a large experiment centered on "independent cohorts" (unified across two ecosystems)
 
-把 **cohort 独立性**本身作为核心设计变量，在两个数据生态上统一执行，跨正交切分轴检验：
+Treating **cohort independence** itself as the core design variable, executed uniformly on two data ecosystems, tested across orthogonal split axes:
 
-  LINCS（参考产品对比：level5beta2020 vs dcic2021，冻结 β-trained 预测）
-    轴 1：药物-based 互不相交 cohort（K=2,4,5）—— 已有
-    轴 2：细胞系-based 互不相交 cohort（K=2,3,4）—— 本脚本新增（正交轴）
-    三口径并行：Pearson / Spearman / cosine
-    聚合单元仍为「药物」（与主文口径一致）：先把 pane 内 Δ 按药物取均值，再按药物 bootstrap
+  LINCS (reference-product comparison: level5beta2020 vs dcic2021, frozen beta-trained prediction)
+    axis 1: drug-based mutually disjoint cohorts (K=2,4,5) -- existing
+    axis 2: cell-line-based mutually disjoint cohorts (K=2,3,4) -- new in this script (orthogonal axis)
+    three calibers in parallel: Pearson / Spearman / cosine
+    the aggregation unit is still "drug" (matching the main text): first average Δ within a panel per drug, then bootstrap by drug
 
-  DepMap（训练靶标对比：CERES vs Chronos，VAE-DeepDEP 5 seed）
-    轴：细胞系-based 互不相交 cohort（K=2,4）—— 已有
+  DepMap (training-target comparison: CERES vs Chronos, VAE-DeepDEP 5 seeds)
+    axis: cell-line-based mutually disjoint cohorts (K=2,4) -- existing
     per-seed cellwise median → mean over seeds；hierarchical bootstrap (seed→cell)
 
-产出（统一交付）：
-  results/big_experiment_independent_cohorts.csv   逐 cohort（双生态）底表
-  results/big_experiment_independent_cohorts.json  汇总 + 复制度量
-  figures/big_experiment_independent_cohorts.png   双生态 forest 图
+Deliverables (unified):
+  results/big_experiment_independent_cohorts.csv   per-cohort (both ecosystems) table
+  results/big_experiment_independent_cohorts.json  summary + replication metrics
+  figures/big_experiment_independent_cohorts.png   two-ecosystem forest plot
 """
 import csv
 import io
@@ -48,12 +48,12 @@ def ci_of(per_drug, rng, n=N_BOOT):
 
 
 def relabel(lines):
-    """原 CSV 首行列名 -> 三口径 Δ 列名"""
+    """Original CSV header names -> the three-caliber Δ column names"""
     return None
 
 
-# ══════════════════════════  LINCS 部分 ══════════════════════════
-log("载入 LINCS 逐行三口径底表 ...")
+# ==========================  LINCS section  ==========================
+log("loading the LINCS per-row three-caliber table ...")
 per = []
 with open(os.path.join(RES, "frozen_perrow_three_metrics.csv"), encoding="utf-8") as f:
     rd = csv.DictReader(f)
@@ -73,7 +73,7 @@ METRIC_KEY = {"pearson": "delta_pearson", "spearman": "delta_spearman", "cosine"
 
 
 def lincs_cohort(mask, metric, tag_extra=""):
-    """cohort 内：先按药物聚合 Δ，再按药物 bootstrap（与主文聚合单元一致）"""
+    """Within a cohort: first aggregate Δ per drug, then bootstrap by drug (matching the main-text aggregation unit)"""
     dg = np.unique(drugs[mask])
     dpos = {d: j for j, d in enumerate(dg)}
     arr = np.empty(len(dg), dtype=np.float64)
@@ -86,9 +86,9 @@ def lincs_cohort(mask, metric, tag_extra=""):
 rows_out = []
 lincs_summary = {}
 
-# ---- 轴 2：细胞系-based 互不相交 cohort（正交轴，本脚本新增）----
+# ---- axis 2: cell-line-based mutually disjoint cohorts (orthogonal axis; new in this script) ----
 uniq_cells = np.array(sorted(set(cells.tolist())), dtype=object)
-log("LINCS 细胞系 %d 个，做 cell-based 独立 cohort ..." % len(uniq_cells))
+log("%d LINCS cell lines; running cell-based independent cohorts ..." % len(uniq_cells))
 lincs_summary["axis_cell"] = {}
 for K in [2, 3, 4]:
     rngk = np.random.RandomState(31337 + K)
@@ -120,12 +120,12 @@ for K in [2, 3, 4]:
         "median_pearson": round(float(np.median(est)), 6),
         "range_pearson": [round(float(est.min()), 6), round(float(est.max()), 6)]}
     lincs_summary["axis_cell"]["K%d" % K] = rec
-    log("  K=%d Δ(pearson)=%s 全部同号=%s 全部CI不跨0=%s"
+    log("  K=%d Δ(pearson)=%s all same sign=%s all CIs exclude 0=%s"
         % (K, np.round(est, 4).tolist(), rec["consistency"]["all_same_sign"],
            rec["consistency"]["all_ci_exclude_zero"]))
 
-# ---- 轴 1：药物-based（引用已算结果，纳入统一底表）----
-log("并入 LINCS 药物-based cohort 结果（已有）...")
+# ---- axis 1: drug-based (reuse existing results; include in the unified table) ----
+log("merging in the LINCS drug-based cohort results (existing) ...")
 with open(os.path.join(RES, "frozen_cohort_replication.csv"), encoding="utf-8") as f:
     for r in csv.DictReader(f):
         K = int(r["K"])
@@ -138,12 +138,12 @@ with open(os.path.join(RES, "frozen_cohort_replication.csv"), encoding="utf-8") 
                                  ci95_high=float(r["hi_pearson"] if m == "pearson" else "0"),
                                  excludes_zero=(r["pearson_excludes_zero"] == "True") if m == "pearson" else None,
                                  estimand="reference contrast Δ=PCC(β2020)−PCC(dcic2021)"))
-lincs_summary["note_drug_axis"] = ("药物轴 CI 逐行写入已有 summary json；"
-                                   "本统一底表对 drug 轴仅携带 pearson 的 CI（spearman/cosine CI 见 "
+lincs_summary["note_drug_axis"] = ("drug-axis CIs are written per row into the existing summary json;"
+                                   "this unified table carries only the pearson CI for the drug axis (spearman/cosine CIs see "
                                    "frozen_multimetric_summary.json cohort_replication）")
 
-# ══════════════════════════  DepMap 部分 ══════════════════════════
-log("并入 DepMap 细胞系-based cohort 结果 ...")
+# ==========================  DepMap section  ==========================
+log("merging in the DepMap cell-line-based cohort results ...")
 with open(os.path.join(RES, "depmap_cohort_replication.csv"), encoding="utf-8") as f:
     for r in csv.DictReader(f):
         rows_out.append(dict(ecosystem="DepMap", split_axis="cell_line", K=int(r["K"]),
@@ -167,7 +167,7 @@ with open(os.path.join(RES, "big_experiment_independent_cohorts.csv"), "w", newl
     w.writeheader()
     w.writerows(rows_out)
 
-# ══════════════════════════  复制度量汇总 ══════════════════════════
+# ==========================  replication-metric summary  ==========================
 def counts(sub):
     if not sub:
         return dict(n=0, same_sign=None, all_excl=None)
@@ -190,7 +190,7 @@ pear = list(one_per_split.values())
 big = {
     "schema": "big_experiment_independent_cohort/v1",
     "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    "question": "把 cohort 独立性作为核心设计变量：同一（成对）参考/靶标对比，能否在每个互不相交的独立 cohort 内复现？",
+    "question": "Taking cohort independence as the core design variable: can the same (paired) reference/target contrast be reproduced within each mutually disjoint independent cohort?",
     "reference": {
         "LINCS_full_sample_pearson": lj["metrics"]["beta_trained"]["pearson"]["delta_A_minus_B"],
         "DepMap_full_sample_interaction": dj["full_sample"]["interaction"]},
@@ -208,15 +208,15 @@ json.dump(big, io.open(os.path.join(RES, "big_experiment_independent_cohorts.jso
           ensure_ascii=False, indent=1)
 
 log("=" * 96)
-log("复制度量（pearson 口径，每个 split 取一个代表）")
+log("replication metrics (pearson caliber, one representative per split)")
 for k, v in big["by_view"].items():
-    log("  %-18s n=%-3d 同号=%-5s 全部CI不跨0=%-5s 中位=%.6f 范围=%s"
+    log("  %-18s n=%-3d same-sign=%-5s allCIsExclude0=%-5s median=%.6f range=%s"
         % (k, v["n"], v["same_sign"], v["all_excl"], v.get("median", float("nan")), v.get("range")))
-log("  参考：LINCS 全样本 Δ=%.6f  |  DepMap 全样本 I=%.6f"
+log("  reference: LINCS full-sample Δ=%.6f  |  DepMap full-sample I=%.6f"
     % (big["reference"]["LINCS_full_sample_pearson"][0], big["reference"]["DepMap_full_sample_interaction"]))
 log("=" * 96)
 
-# ══════════════════════════  图：双生态 forest ══════════════════════════
+# ==========================  figure: two-ecosystem forest  ==========================
 plt.rcParams.update({"figure.dpi": 150, "savefig.dpi": 150, "font.size": 10,
                      "axes.grid": True, "grid.alpha": 0.3, "axes.axisbelow": True})
 fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.4))

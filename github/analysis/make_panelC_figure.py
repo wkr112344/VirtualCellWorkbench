@@ -1,4 +1,4 @@
-# Panel C 单独出图：Ridge 与 Frozen 的 2×2（raw / per-gene residualized），带 interaction 的 5000× CI
+# Panel C on its own: 2x2 for Ridge and Frozen (raw / per-gene residualized), with 5000x CIs on the interaction
 import json, os
 import numpy as np
 import matplotlib

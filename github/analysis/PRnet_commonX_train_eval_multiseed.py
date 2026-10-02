@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PRnet_commonX_train_eval_multiseed.py — 「完整A」受控 2×2 的 LINCS PRnet 多 seed 研究。
+PRnet_commonX_train_eval_multiseed.py -- multi-seed LINCS PRnet study of the "full set A" controlled 2x2.
 
-与单 seed 版 PRnet_commonX_train_eval.py 同设计约束（共享 X，仅 training target 不同：
-β表达 Y_beta vs dcic2021 CD 签名 Y_dcic）。本脚本把整条 2×2 流水线包进 N 个 seed：
+Same design constraints as the single-seed PRnet_commonX_train_eval.py (shared X; only the training target differs:
+beta expression Y_beta vs dcic2021 CD signature Y_dcic). This script wraps the whole 2x2 pipeline in N seeds:
 
-  对每个 seed k：
-    1) 设随机种子 -> 建同一结构的两臂 (PGM)
-    2) 训练 beta 臂 (target=Y_beta) 与 dcic 臂 (target=Y_dcic)
-    3) 在 S25 留出集上各跑预测，逐 sample (969 维向量) 算 pearson + spearman
-    4) 四格 BB/BD/DB/DD + interaction = (BB-BD)-(DB-DD)   [sp & pe 各一版]
+  for each seed k:
+    1) set the random seed -> build both arms with the same architecture (PGM)
+    2) train the beta arm (target=Y_beta) and the dcic arm (target=Y_dcic)
+    3) predict on the S25 hold-out for each, computing pearson + spearman per sample (969-dim vector)
+    4) four cells BB/BD/DB/DD + interaction = (BB-BD)-(DB-DD)   [one version each for sp & pe]
 
-  跨 seed 聚合：
-    - multiseed_2x2_summary.csv  (每 seed 的四格 + interaction)
-    - multiseed_bootstrap.npz    (hierarchical bootstrap 5000 次 interaction replicates)
+  cross-seed aggregation:
+    - multiseed_2x2_summary.csv  (per-seed four cells + interaction)
+    - multiseed_bootstrap.npz    (5000 hierarchical-bootstrap interaction replicates)
     - per_seed_interaction (n_seed,2)
 
-交互作用显著性用 hierarchical bootstrap：每次重复同时重采样 seed 与 sample，
-给出 interaction 的 95% CI（与 DepMap G/H 的口径一致）。
+Interaction significance uses a hierarchical bootstrap: each replicate resamples both seeds and samples,
+giving a 95% CI for the interaction (matching the DepMap G/H caliber).
 
-注意：必须用含 torch 的 python 运行（dpb311: C:/Users/wkr20/miniconda3/envs/dpb311/python.exe）。
-数据需先由 PRnet_commonX_build.py (Morgan 版) 产出 PRnet_commonX_dualY.h5。
+Note: must run with a python that has torch (dpb311: C:/Users/wkr20/miniconda3/envs/dpb311/python.exe）。
+The data must first be produced by PRnet_commonX_build.py (Morgan version) as PRnet_commonX_dualY.h5.
 
-用法：
+Usage:
   python PRnet_commonX_train_eval_multiseed.py --seeds 5 --train-cap 200000
-  python PRnet_commonX_train_eval_multiseed.py --seeds 1 --train-cap 40000 --limit-eval 5000   # 快速 sanity
+  python PRnet_commonX_train_eval_multiseed.py --seeds 1 --train-cap 40000 --limit-eval 5000   # quick sanity check
 """
 import argparse, json, os, sys, math, random
 import h5py
@@ -34,7 +34,7 @@ import torch
 import torch.nn as nn
 from scipy.stats import rankdata
 
-# ============================================================ PRnet 模型 (PGM)
+# ============================================================ PRnet model (PGM)
 class PEncoder(nn.Module):
     def __init__(self, layer_sizes, z_dim, dr):
         super().__init__()
@@ -117,7 +117,7 @@ class PGM(nn.Module):
         z = self.encoder(torch.cat((x, c), 1))
         return self.decoder(torch.cat((z, c, n), 1))
 
-# ============================================================ 超参（与单 seed 版锁死）
+# ============================================================ hyperparameters (locked to the single-seed version)
 X_DIM = 969
 HIDDEN = [128]
 Z_DIM = 64
@@ -145,7 +145,7 @@ def weight_init(m):
         m.weight.data.normal_(1, 0.02)
         if m.bias is not None: m.bias.data.zero_()
 
-# ============================================================ 流式 batch 生成器
+# ============================================================ streaming batch generator
 def iter_batches(h5, idx, Yname, dose_z, time_z, batch, shuffle, device, with_y=True):
     sidx = np.sort(idx)
     for s in range(0, len(sidx), CHUNK):
@@ -168,7 +168,7 @@ def iter_batches(h5, idx, Yname, dose_z, time_z, batch, shuffle, device, with_y=
             else:
                 yield xb_t, cond_t
 
-# ============================================================ 向量化逐 sample 相关（比逐行快很多）
+# ============================================================ vectorized per-sample correlation (much faster than row loops)
 def corr_rows(pred, true, method):
     pred = np.asarray(pred, dtype=np.float64)
     true = np.asarray(true, dtype=np.float64)
@@ -184,16 +184,16 @@ def corr_rows(pred, true, method):
     den = np.sqrt((pm**2).sum(1) * (tm**2).sum(1))
     return np.where(den > 1e-12, num / den, np.nan)
 
-# ============================================================ 主流程
+# ============================================================ main flow
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/data/prnet_commonX/PRnet_commonX_dualY.h5")
     ap.add_argument("--outdir", default=r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/data/prnet_commonX")
     ap.add_argument("--epochs", type=int, default=N_EPOCHS)
-    ap.add_argument("--seeds", type=int, default=5, help="seed 数量")
+    ap.add_argument("--seeds", type=int, default=5, help="number of seeds")
     ap.add_argument("--seed-base", type=int, default=2024)
-    ap.add_argument("--train-cap", type=int, default=200000, help="训练样本子采样上限 (0=全量)")
-    ap.add_argument("--limit-eval", type=int, default=None, help="S25 eval 子集上限 (None=全量)")
+    ap.add_argument("--train-cap", type=int, default=200000, help="cap on training-sample subsampling (0 = full)")
+    ap.add_argument("--limit-eval", type=int, default=None, help="cap on the S25 eval subset (None = full)")
     ap.add_argument("--tag", default="multiseed")
     args = ap.parse_args()
 
@@ -211,7 +211,7 @@ def main():
     time_z = ((time - tm_) / ts).astype(np.float32)
 
     train_idx = np.where(split == 0)[0]
-    # 固定 train 子集（跨 seed 一致），隔离 seed 方差到权重初始化/打乱顺序
+    # fixed train subset (consistent across seeds), isolating seed variance to weight init / shuffle order
     if args.train_cap and 0 < args.train_cap < len(train_idx):
         rng_t = np.random.default_rng(12345)
         train_idx = rng_t.choice(train_idx, args.train_cap, replace=False)
@@ -279,7 +279,7 @@ def main():
                     preds.append(out[:, :out.size(1)//2].detach().cpu().numpy())
         return np.concatenate(preds, 0)
 
-    # ---- 逐 seed 跑 2×2 ----
+    # ---- run the 2x2 per seed ----
     BB_sp, BD_sp, DB_sp, DD_sp = [], [], [], []
     BB_pe, BD_pe, DB_pe, DD_pe = [], [], [], []
     seed_interactions = []   # (sp, pe)
@@ -294,7 +294,7 @@ def main():
         db_sp = corr_rows(pred_dcic, Yb, "spearman"); dd_sp = corr_rows(pred_dcic, Yd, "spearman")
         bb_pe = corr_rows(pred_beta, Yb, "pearson");  bd_pe = corr_rows(pred_beta, Yd, "pearson")
         db_pe = corr_rows(pred_dcic, Yb, "pearson");  dd_pe = corr_rows(pred_dcic, Yd, "pearson")
-        # 释放大预测矩阵
+        # free the large prediction matrices
         del pred_beta, pred_dcic
         BB_sp.append(bb_sp); BD_sp.append(bd_sp); DB_sp.append(db_sp); DD_sp.append(dd_sp)
         BB_pe.append(bb_pe); BD_pe.append(bd_pe); DB_pe.append(db_pe); DD_pe.append(dd_pe)
@@ -306,7 +306,7 @@ def main():
               f"DB_sp={np.nanmean(db_sp):+.4f} DD_sp={np.nanmean(dd_sp):+.4f} interaction_sp={int_sp:+.4f}")
 
     n_seed = args.seeds
-    # ---- 聚合表 ----
+    # ---- aggregation table ----
     rows = []
     for k in range(n_seed):
         rows.append(dict(
@@ -324,15 +324,15 @@ def main():
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader(); w.writerows(rows)
 
-    # ---- hierarchical bootstrap (seed + sample 双重重采样) ----
+    # ---- hierarchical bootstrap (double resampling of seed + sample) ----
     rng = np.random.default_rng(args.seed_base)
     NB = 5000
     rep_sp, rep_pe = np.empty(NB), np.empty(NB)
     for b in range(NB):
-        chosen = rng.integers(0, n_seed, n_seed)   # 重采样 seed
+        chosen = rng.integers(0, n_seed, n_seed)   # resample seeds
         v_sp, v_pe = [], []
         for s in chosen:
-            idx = rng.integers(0, M, M)             # 重采样 sample (within seed)
+            idx = rng.integers(0, M, M)             # resample samples (within seed)
             d_sp = (BB_sp[s][idx] - BD_sp[s][idx]) - (DB_sp[s][idx] - DD_sp[s][idx])
             d_pe = (BB_pe[s][idx] - BD_pe[s][idx]) - (DB_pe[s][idx] - DD_pe[s][idx])
             v_sp.append(d_sp); v_pe.append(d_pe)

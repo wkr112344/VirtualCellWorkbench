@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PRnet_commonX_train_eval_strengthened.py — 「完整A」受控 2×2 的 *加强版* 单 seed 探针。
+PRnet_commonX_train_eval_strengthened.py -- a *strengthened* single-seed probe of the "full set A" controlled 2x2.
 
-目的：验证「把 PRnet 容量加大 + 决定性评测(n=0) 后，val_mse 能否打穿 1.07 的方差地板」。
-如果能在单 seed 上把 val_mse 压到 < 1.0，说明 LINCS 的 X->Y 映射是可学的，再决定是否全量重跑 5-seed。
-如果仍然卡在 ~1.07，则基本可判定是数据本身的真 null / 弱信号，加强模型也无济于事。
+Purpose: test whether, after enlarging PRnet capacity and making evaluation deterministic (n=0), val_mse can break through the ~1.07 variance floor.
+If val_mse can be pushed below 1.0 on a single seed, the LINCS X->Y mapping is learnable, and we then decide whether to rerun 5 seeds at full scale.
+If it still stalls at ~1.07, this is essentially a true null / weak signal in the data itself, and strengthening the model will not help.
 
-与 multiseed 脚本保持完全一致的两点：
-  - 数据 split / 四格定义 / corr 计算逻辑 一字不改（同 PRnet_commonX_dualY.h5）
-  - 超参对比基线：train-cap 默认 200000（与全量多 seed 一致，隔离变量）
+Two things kept exactly consistent with the multiseed script:
+  - data split / four-cell definition / corr computation logic unchanged (same PRnet_commonX_dualY.h5)
+  - hyperparameter baseline: train-cap defaults to 200000 (same as the full multi-seed run, isolating the variable)
 
-相对 multiseed 的 *加强* 改动（全部集中在本文件顶部常量）：
-  - 容量：HIDDEN [128] -> [512,256]，Z_DIM 64 -> 256，ADAPTOR [128] -> [512,256]，C_DIM 64 -> 128
-  - 评测决定性：predict / val 用 n=0（原来是 torch.randn -> 注入噪声、压低 correlation）
-  - 训练：去掉 ReduceLROnPlateau（val 卡住会把 LR 砍到 min_lr），改固定 LR + 更长 patience
-  - 轻微正则：DR_RATE 0.05->0.1，WD 1e-8->1e-6（更大模型防过拟合）
+*Strengthened* changes relative to multiseed (all in the constants at the top of this file):
+  - capacity: HIDDEN [128] -> [512,256], Z_DIM 64 -> 256, ADAPTOR [128] -> [512,256], C_DIM 64 -> 128
+  - deterministic evaluation: predict / val use n=0 (previously torch.randn -> injects noise, lowering correlation)
+  - training: drop ReduceLROnPlateau (a stalled val cuts LR to min_lr), use a fixed LR + longer patience
+  - light regularization: DR_RATE 0.05->0.1, WD 1e-8->1e-6 (guard the larger model against overfitting)
 
-须用含 torch 的 python 运行（dpb311）。
-用法：
+Must run with a python that has torch (dpb311).
+Usage:
   python PRnet_commonX_train_eval_strengthened.py --seeds 1 --seed-base 2024 --train-cap 200000
 """
 import argparse, os, random
@@ -28,7 +28,7 @@ import torch
 import torch.nn as nn
 from scipy.stats import rankdata
 
-# ============================================================ PRnet 模型 (PGM) —— 与 multiseed 同结构
+# ============================================================ PRnet model (PGM) -- same architecture as multiseed
 class PEncoder(nn.Module):
     def __init__(self, layer_sizes, z_dim, dr):
         super().__init__()
@@ -112,22 +112,22 @@ class PGM(nn.Module):
         z = self.encoder(torch.cat((x, c), 1))
         return self.decoder(torch.cat((z, c, n), 1))
 
-# ============================================================ 加强版超参
+# ============================================================ strengthened hyperparameters
 X_DIM = 969
-HIDDEN = [512, 256]      # 原 [128]
-Z_DIM = 256              # 原 64
-ADAPTOR = [512, 256]     # 原 [128]
-C_DIM = 128              # 原 64
+HIDDEN = [512, 256]      # was [128]
+Z_DIM = 256              # was 64
+ADAPTOR = [512, 256]     # was [128]
+C_DIM = 128              # was 64
 DRUG_DIM = 1026          # 1024 (Morgan) + dose_z + time_z
 N_DIM = 10
-DR_RATE = 0.1            # 原 0.05
+DR_RATE = 0.1            # was 0.05
 LR = 1e-3
-WD = 1e-6                # 原 1e-8
+WD = 1e-6                # was 1e-8
 BATCH = 512
 N_EPOCHS = 300
-EARLY_PATIENCE = 40      # 原 20
+EARLY_PATIENCE = 40      # was 20
 CHUNK = 20000
-# 评测决定性：True 时 n=0（原来训练/评测都用 randn）
+# deterministic evaluation: n=0 when True (previously both training and eval used randn)
 EVAL_DETERMINISTIC = True
 
 def make_model(device, seed):
@@ -147,7 +147,7 @@ def weight_init(m):
         m.weight.data.normal_(1, 0.02)
         if m.bias is not None: m.bias.data.zero_()
 
-# ============================================================ 流式 batch 生成器
+# ============================================================ streaming batch generator
 def iter_batches(h5, idx, Yname, dose_z, time_z, batch, shuffle, device, with_y=True):
     sidx = np.sort(idx)
     for s in range(0, len(sidx), CHUNK):
@@ -170,7 +170,7 @@ def iter_batches(h5, idx, Yname, dose_z, time_z, batch, shuffle, device, with_y=
             else:
                 yield xb_t, cond_t
 
-# ============================================================ 向量化逐 sample 相关
+# ============================================================ vectorized per-sample correlation
 def corr_rows(pred, true, method):
     pred = np.asarray(pred, dtype=np.float64)
     true = np.asarray(true, dtype=np.float64)
@@ -186,7 +186,7 @@ def corr_rows(pred, true, method):
     den = np.sqrt((pm**2).sum(1) * (tm**2).sum(1))
     return np.where(den > 1e-12, num / den, np.nan)
 
-# ============================================================ 主流程
+# ============================================================ main flow
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default=r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/data/prnet_commonX/PRnet_commonX_dualY.h5")
@@ -194,11 +194,11 @@ def main():
     ap.add_argument("--epochs", type=int, default=N_EPOCHS)
     ap.add_argument("--seeds", type=int, default=1)
     ap.add_argument("--seed-base", type=int, default=2024)
-    ap.add_argument("--train-cap", type=int, default=200000, help="训练样本子采样上限 (0=全量)")
+    ap.add_argument("--train-cap", type=int, default=200000, help="cap on training-sample subsampling (0 = full)")
     ap.add_argument("--limit-eval", type=int, default=None)
     ap.add_argument("--tag", default="strengthened")
     ap.add_argument("--loss", default="nll", choices=["nll", "mse"],
-                    help="nll=GaussianNLLLoss(含 logvar 头); mse=仅对 mean 做 MSE(逼模型学均值, 这才是评测用的量)")
+                    help="nll=GaussianNLLLoss (with a logvar head); mse=MSE on the mean only (forces the model to learn the mean, which is what evaluation uses)")
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -292,7 +292,7 @@ def main():
                     preds.append(out[:, :out.size(1)//2].detach().cpu().numpy())
         return np.concatenate(preds, 0)
 
-    # ---- 逐 seed 跑 2×2 ----
+    # ---- run the 2x2 per seed ----
     BB_sp, BD_sp, DB_sp, DD_sp = [], [], [], []
     BB_pe, BD_pe, DB_pe, DD_pe = [], [], [], []
     seed_interactions = []
@@ -341,7 +341,7 @@ def main():
         print(f"  seed {r['seed']}: BB={r['BB_sp']:+.4f} BD={r['BD_sp']:+.4f} DB={r['DB_sp']:+.4f} "
               f"DD={r['DD_sp']:+.4f} int={r['interaction_sp']:+.4f}")
     print(f"  mean interaction_sp = {med_sp:+.4f}   interaction_pe = {med_pe:+.4f}")
-    print(f"  (baseline 对比: 原 multiseed val_mse 卡 ~1.07 -> 看上面 train_arm 的 best val_mse 能否 < 1.0)")
+    print(f"  (baseline comparison: the original multiseed val_mse stalls at ~1.07 -> see whether train_arm's best val_mse above can be < 1.0)")
     print(f"  -> {sum_csv}")
 
 if __name__ == "__main__":

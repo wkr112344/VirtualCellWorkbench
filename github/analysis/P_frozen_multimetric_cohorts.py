@@ -1,26 +1,26 @@
 # -*- coding: utf-8 -*-
 """
-P_frozen_multimetric_cohorts.py —— 补齐「LINCS 冻结预测」的缺失工件 + 独立 cohort 大实验
+P_frozen_multimetric_cohorts.py -- fill in the missing "LINCS frozen prediction" artifacts + the big independent-cohort experiment
 
-本次要交付（同一份重数据只加载一次）：
-  1) 原始 prediction matrix：beta-trained / dcic-trained 在 P*=11,275 对 × 978 landmark 上的
-     冻结预测矩阵，落盘 .npy（此前本地投稿包缺失该中间矩阵）。
-  2) 多口径读数：除主文 Pearson 外，补 **逐行 Spearman** 与 **逐行 cosine**，
-     对 level5beta2020 / dcic2021 两参考分别给均值 + 药物聚类 bootstrap 95% CI，
-     并给配对 Δ（reference contrast）。三种口径并行 => 说明结论不是 Pearson-only 假象。
-  3) single-case walkthrough：挑中位/极端 Δ 的代表行，给出预测向量与两参考行的
-     原始数值片段 + 统计量 + 三种口径得分，使单个结论可人工逐步复核。
-  4) 同 reference-pair 的 non-overlapping cohort replication：保持参考对不变，
-     把 2,037 个留出药物切成互不相交 cohort（药物不跨 cohort），
-     每个 cohort 内独立重算 Δ 与其 CI，看是否在每个独立 cohort 内复现。
+Deliverables this round (the same heavy data is loaded only once):
+  1) raw prediction matrices: beta-trained / dcic-trained frozen prediction matrices over P*=11,275 pairs x 978 landmarks,
+     written to .npy (this intermediate matrix was missing from the earlier local submission package).
+  2) multi-caliber readings: besides the main-text Pearson, add **per-row Spearman** and **per-row cosine**,
+     giving means + drug-cluster bootstrap 95% CIs for each of the level5beta2020 / dcic2021 references,
+     plus the paired Δ (reference contrast). Three calibers in parallel => shows the conclusion is not a Pearson-only artifact.
+  3) single-case walkthrough: pick representative rows at the median / extreme Δ, giving the raw numeric
+     snippets of the prediction vector and the two reference rows + statistics + scores in all three calibers, so a single conclusion can be checked by hand step by step.
+  4) non-overlapping cohort replication for the same reference pair: keeping the reference pair fixed,
+     split the 2,037 held-out drugs into mutually disjoint cohorts (drugs never cross cohorts),
+     and independently recompute Δ and its CI within each cohort, to see whether it reproduces in each independent cohort.
 
-正确性门槛：必须先复现主文 M_BB≈0.3680 / M_BD≈0.0724（否则中止）。
+Correctness gate: must first reproduce the main-text M_BB ~ 0.3680 / M_BD ~ 0.0724 (otherwise abort).
 
-设计严格照抄 p4c_run_A_2x2.py：C*=64 / D*=20,370 / H=2,037 / P*=11,275，
-RandomState(0) 后 10% 药物为 H；基因轴 = 978 landmark (internal_col)；
-bootstrap 按药物聚类，N_BOOT=2000，seed 12345。
+Design follows p4c_run_A_2x2.py exactly: C*=64 / D*=20,370 / H=2,037 / P*=11,275,
+the last 10% of drugs under RandomState(0) form H; gene axis = 978 landmarks (internal_col);
+bootstrap clusters by drug, N_BOOT=2000, seed 12345.
 
-运行：dpb311 python -u P_frozen_multimetric_cohorts.py
+Run: dpb311 python -u P_frozen_multimetric_cohorts.py
 """
 import io
 import json
@@ -35,9 +35,9 @@ import torch.nn.functional as F
 BASE = r"C:\Users\wkr20\WorkBuddy\2026-09-06-00-53-37"
 OUT = r"C:\Users\wkr20\WorkBuddy\Claw\gigascience_v5\results"
 
-D_REB = os.path.join(BASE, "data", "g2cp_cache_rebuilt")   # 仅用于定义设计集 P*
-D_B2 = os.path.join(BASE, "data", "g2cp_cache_beta_v2")    # beta eval 参考 (level5beta2020)
-D_21 = os.path.join(BASE, "data", "g2cp_cache_2021")       # dcic eval 参考 (dcic2021)
+D_REB = os.path.join(BASE, "data", "g2cp_cache_rebuilt")   # used only to define the design set P*
+D_B2 = os.path.join(BASE, "data", "g2cp_cache_beta_v2")    # beta eval reference (level5beta2020)
+D_21 = os.path.join(BASE, "data", "g2cp_cache_2021")       # dcic eval reference (dcic2021)
 GENE_MAP = os.path.join(BASE, "_scratch", "v31_mvpa", "93_gene_map_12328_to_978.json")
 CKPT_BETA = os.path.join(BASE, "assets", "g2cp_v7_beta_ft.pt")
 CKPT_DCIC = os.path.join(BASE, "assets", "g2cp_v7_dcic_ft.pt")
@@ -45,7 +45,7 @@ CKPT_DCIC = os.path.join(BASE, "assets", "g2cp_v7_dcic_ft.pt")
 DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 N_BOOT = 2000
 EPS = 1e-8
-N_COHORT_DRUGS_SPLIT = [2, 4, 5]   # 药物切成 K 个互不相交 cohort
+N_COHORT_DRUGS_SPLIT = [2, 4, 5]   # split drugs into K mutually disjoint cohorts
 _t0 = time.time()
 
 
@@ -53,8 +53,8 @@ def log(m):
     print("[%s] %s" % (time.strftime("%H:%M:%S"), m), flush=True)
 
 
-# ───────────────────────────── 1. 设计集 P*（逐字照抄 p4c） ───────────────────────
-log("构建设计集 ...")
+# ----------------------------- 1. design set P* (verbatim copy of p4c) -----------------------
+log("building the design set ...")
 pmB = np.load(os.path.join(D_21, "pairs_meta.npz"), allow_pickle=True)
 b_cell = np.array([str(x) for x in pmB["cell_name"]], dtype=object)
 b_drug = np.array([str(x) for x in pmB["drug_id"]], dtype=object)
@@ -77,13 +77,13 @@ b_pairs = set(zip(b_cell.tolist(), b_drug.tolist()))
 Pstar = sorted(p for p in (r_pairs & b_pairs) if p[0] in Cs_set and p[1] in H)
 nP = len(Pstar)
 pidx = {p: i for i, p in enumerate(Pstar)}
-log("设计 C*=%d D*=%d H=%d P*=%d" % (len(Cstar), len(Dstar), len(H), nP))
-assert (len(Cstar), len(Dstar), len(H), nP) == (64, 20370, 2037, 11275), "设计≠归档 p4c 口径，中止"
+log("design C*=%d D*=%d H=%d P*=%d" % (len(Cstar), len(Dstar), len(H), nP))
+assert (len(Cstar), len(Dstar), len(H), nP) == (64, 20370, 2037, 11275), "design != archived p4c caliber; aborting"
 
 P_cells = np.array([p[0] for p in Pstar], dtype=object)
 P_drugs = np.array([p[1] for p in Pstar], dtype=object)
 
-# ───────────────────────────── 2. 978 landmark 基因轴 ────────────────────────────
+# ----------------------------- 2. 978 landmark gene axis ----------------------------
 gm = json.load(io.open(GENE_MAP, encoding="utf-8"))
 internal_col = np.asarray(gm["internal_col"], dtype=np.int64)
 assert internal_col.size == 978 and len(set(internal_col.tolist())) == 978
@@ -92,12 +92,12 @@ for k in ("symbols", "genes", "gene_symbols", "landmark_symbols"):
     if isinstance(gm.get(k), list) and len(gm[k]) == 978:
         gene_symbols = np.array([str(x) for x in gm[k]], dtype=object)
         break
-log("基因轴 978（internal_col）；符号表 %s" % ("可用" if gene_symbols is not None else "不可用（用列号）"))
+log("gene axis 978 (internal_col); symbol table %s" % ("available" if gene_symbols is not None else "unavailable (use column index)"))
 
 
-# ───────────────────────────── 3. 目标矩阵 T_A / T_B → 978 ───────────────────────
+# ----------------------------- 3. target matrices T_A / T_B -> 978 -----------------------
 def pair_level_978(d, cell, drug, tag):
-    """直接在对级取行并切到 978 列（避免 12328 中间大矩阵）。"""
+    """Select rows directly at pair level and slice to the 978 columns (avoiding a 12328 intermediate matrix)."""
     Y = np.load(os.path.join(d, "y.npy"), mmap_mode="r")
     sel = [i for i in range(len(cell)) if (cell[i], drug[i]) in pidx]
     tgt = np.array([pidx[(cell[i], drug[i])] for i in sel], dtype=np.int64)
@@ -109,7 +109,7 @@ def pair_level_978(d, cell, drug, tag):
         T[tgt[s:s + CH]] = v[:, internal_col]
         del v
     del Y
-    log("  %s: 命中 %d 行 -> T%s" % (tag, len(sel), T.shape))
+    log("  %s: %d rows matched -> T%s" % (tag, len(sel), T.shape))
     return T
 
 
@@ -117,12 +117,12 @@ pmB2 = np.load(os.path.join(D_B2, "pairs_meta.npz"), allow_pickle=True)
 b2_cell = np.array([str(x) for x in pmB2["cell_name"]], dtype=object)
 b2_drug = np.array([str(x) for x in pmB2["drug_id"]], dtype=object)
 
-log("读取 T_A = cache_beta_v2 (level5beta2020) ...")
+log("reading T_A = cache_beta_v2 (level5beta2020) ...")
 T_A = pair_level_978(D_B2, b2_cell, b2_drug, "A")
-log("读取 T_B = cache_2021 (dcic2021) ...")
+log("reading T_B = cache_2021 (dcic2021) ...")
 T_B = pair_level_978(D_21, b_cell, b_drug, "B")
 
-# ───────────────────────────── 4. 冻结预测矩阵 ───────────────────────────────────
+# ----------------------------- 4. frozen prediction matrices -------------------------------
 ck0 = torch.load(CKPT_BETA, map_location="cpu", weights_only=False)
 cl_names = [str(x) for x in ck0["cl_names"]]
 drugv = [str(x) for x in ck0["drug_vocab"]]
@@ -139,11 +139,11 @@ def build_net(sd):
     K_CELL = "cell.weight" if "cell.weight" in sd else "cell_emb.weight"
     G = sd["head.3.weight"].shape[0]
     NCELL = sd[K_CELL].shape[0]
-    assert G == 12328, "G=%d 应=12328" % G
+    assert G == 12328, "G=%d should equal 12328" % G
 
     class Net(nn.Module):
-        """与 p4c_run_A_2x2.py 逐层一致：head = LayerNorm(544) → Linear(544,1024) → GELU → Linear(1024,G)
-        对应 state_dict 键 head.{0,1,3}（GELU 占 head.2 无参数）。勿删 LayerNorm。"""
+        """Layer-for-layer identical to p4c_run_A_2x2.py: head = LayerNorm(544) -> Linear(544,1024) -> GELU -> Linear(1024,G)
+        corresponding to state_dict keys head.{0,1,3} (GELU occupies head.2 with no parameters). Do not remove LayerNorm."""
         def __init__(self):
             super().__init__()
             self.cp = nn.Linear(2048, 512)
@@ -179,19 +179,19 @@ def predict(ckpt_path):
     return np.concatenate(outs, 0)
 
 
-log("预测 beta-trained ...")
+log("predicting beta-trained ...")
 P_beta = predict(CKPT_BETA)
-log("预测 dcic-trained ...")
+log("predicting dcic-trained ...")
 P_dcic = predict(CKPT_DCIC)
 log("P_beta %s  P_dcic %s" % (P_beta.shape, P_dcic.shape))
 
 os.makedirs(OUT, exist_ok=True)
 np.save(os.path.join(OUT, "frozen_pred_matrix_beta_trained_11275x978.npy"), P_beta)
 np.save(os.path.join(OUT, "frozen_pred_matrix_dcic_trained_11275x978.npy"), P_dcic)
-log("已落盘两个冻结预测矩阵 -> %s" % OUT)
+log("both frozen prediction matrices written -> %s" % OUT)
 
 
-# ───────────────────────────── 5. 三种口径逐行指标 ───────────────────────────────
+# ----------------------------- 5. per-row metrics in three calibers -------------------------
 def row_pearson(Pm, T):
     a = Pm - Pm.mean(1, keepdims=True)
     b = T - T.mean(1, keepdims=True)
@@ -199,7 +199,7 @@ def row_pearson(Pm, T):
 
 
 def row_rank(X):
-    """逐行秩（1..n），向量化；ties 用 ordinal（连续 float 极少 tie，且 tie 行相关性本就 nan）。"""
+    """Per-row ranks (1..n), vectorized; ties use ordinal (continuous floats rarely tie, and tied rows are nan-correlated anyway)."""
     n = X.shape[1]
     order = np.argsort(X, axis=1, kind="mergesort")
     ranks = np.empty(X.shape, dtype=np.float64)
@@ -225,7 +225,7 @@ rng_master = np.random.default_rng(12345)
 
 
 def drug_group(v):
-    """per-row -> per-drug 均值"""
+    """per-row -> per-drug mean"""
     out = np.empty(len(udrug), dtype=np.float64)
     for j, g in enumerate(udrug):
         m = drug_idx == g
@@ -239,7 +239,7 @@ def ci_of(per_drug, rng, n=N_BOOT):
     return float(np.nanmean(per_drug)), float(np.percentile(b, 2.5)), float(np.percentile(b, 97.5))
 
 
-log("计算三口径逐行指标 ...")
+log("computing per-row metrics in three calibers ...")
 MET = {}   # MET[predictor][ref][metric] = per-row array
 for pname, Pm in [("beta_trained", P_beta), ("dcic_trained", P_dcic)]:
     MET[pname] = {}
@@ -249,7 +249,7 @@ for pname, Pm in [("beta_trained", P_beta), ("dcic_trained", P_dcic)]:
             MET[pname][rname][mname] = fn(Pm, T).astype(np.float64)
             log("  %-13s x %-18s %-8s done" % (pname, rname, mname))
 
-# ---------- 多口径汇总表 ----------
+# ---------- multi-caliber summary table ----------
 summary = {"schema": "lincs_frozen_multimetric/v1", "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
            "design": {"Cstar_cells": 64, "Dstar_drugs": 20370, "heldout_drugs": 2037,
                       "eval_pairs": nP, "gene_axis": "978 landmark",
@@ -264,7 +264,7 @@ for pname in ["beta_trained", "dcic_trained"]:
         b = MET[pname]["B_dcic2021"][mname]
         ma = ci_of(drug_group(a), rng)
         mb = ci_of(drug_group(b), rng)
-        # 配对 Δ：逐行差 -> per-drug -> bootstrap
+        # paired Δ: per-row difference -> per-drug -> bootstrap
         rng2 = np.random.default_rng(12345)
         dpyr = np.array([np.nanmean((a - b)[drug_idx == g]) for g in udrug])
         md = ci_of(dpyr, rng2)
@@ -284,31 +284,31 @@ with open(os.path.join(OUT, "frozen_multimetric_three_metrics.csv"), "w", newlin
     w.writeheader(); w.writerows(rows_out)
 
 log("=" * 100)
-log("三口径读数（per-drug 均值 [95%CI]，药物聚类 bootstrap 2000，seed 12345）")
+log("three-caliber readings (per-drug mean [95%CI], drug-cluster bootstrap 2000, seed 12345)")
 for r in rows_out:
     log("  %-13s %-9s A=%+.4f[%+.4f,%+.4f]  B=%+.4f[%+.4f,%+.4f]  Δ=%+.4f[%+.4f,%+.4f] %s"
         % (r["predictor"], r["metric"], r["A_mean"], r["A_lo"], r["A_hi"],
            r["B_mean"], r["B_lo"], r["B_hi"], r["delta"], r["delta_lo"], r["delta_hi"],
-           "显著" if r["ci_excludes_zero"] else "不显著"))
+           "significant" if r["ci_excludes_zero"] else "not significant"))
 log("=" * 100)
 
-# ---------- 正确性门槛：必须复现主文对角 ----------
+# ---------- correctness gate: must reproduce the main-text diagonal ----------
 mb_ = summary["metrics"]["beta_trained"]["pearson"]["A"][0]
 md_ = summary["metrics"]["beta_trained"]["pearson"]["B"][0]
-log("★ 复现检查 peparson: M_BB=%.4f (应≈0.3680)  M_BD=%.4f (应≈0.0724)" % (mb_, md_))
+log("* reproduction check pearson: M_BB=%.4f (expected ~0.3680)  M_BD=%.4f (expected ~0.0724)" % (mb_, md_))
 summary["repro_check"] = {"M_BB": round(mb_, 6), "M_BD": round(md_, 6),
                           "expected": [0.3680, 0.0724],
                           "pass": bool(abs(mb_ - 0.3680) < 0.005 and abs(md_ - 0.0724) < 0.005)}
 if not summary["repro_check"]["pass"]:
-    log("!! 未复现主文对角数，后续结论不可信 —— 中止")
+    log("!! main-text diagonal not reproduced; downstream conclusions unreliable -- aborting")
     json.dump(summary, io.open(os.path.join(OUT, "frozen_multimetric_summary.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
     raise SystemExit(2)
-log("复现通过")
+log("reproduction passed")
 
 
 # ───────────────────────────── 6. single-case walkthrough ────────────────────────
-log("挑选单案例 ...")
+log("picking single cases ...")
 d_row = MET["beta_trained"]["A_level5beta2020"]["pearson"] - MET["beta_trained"]["B_dcic2021"]["pearson"]
 ok_rows = np.where(np.isfinite(d_row))[0]
 i_med = int(ok_rows[np.argsort(np.abs(d_row[ok_rows] - np.median(d_row[ok_rows])))[0]])
@@ -344,7 +344,7 @@ def case_detail(i, label):
     return d
 
 
-cases = [case_detail(i_med, "median Δ (典型)"), case_detail(i_min, "min Δ"), case_detail(i_max, "max Δ")]
+cases = [case_detail(i_med, "median Δ (typical)"), case_detail(i_min, "min Δ"), case_detail(i_max, "max Δ")]
 summary["single_case_walkthrough"] = cases
 json.dump(cases, io.open(os.path.join(OUT, "frozen_single_case_walkthrough.json"), "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)
@@ -355,7 +355,7 @@ for c in cases:
            cs["pearson"]["delta_A_minus_B"], cs["spearman"]["delta_A_minus_B"],
            cs["cosine"]["delta_A_minus_B"]))
 
-# 逐样本三口径底表（供复核，行数不大）
+# per-sample three-caliber table (for checking; not many rows)
 with open(os.path.join(OUT, "frozen_perrow_three_metrics.csv"), "w", newline="", encoding="utf-8") as f:
     hdr = ["row", "cell", "drug"] + ["%s_%s" % (m, r) for m, _ in METRICS
                                      for r in ("A_beta2020", "B_dcic2021")]
@@ -364,13 +364,13 @@ with open(os.path.join(OUT, "frozen_perrow_three_metrics.csv"), "w", newline="",
         w.writerow([i, P_cells[i], P_drugs[i]]
                    + [float(MET["beta_trained"][("A_level5beta2020" if r == "A_beta2020" else "B_dcic2021")][m][i])
                       for m, _ in METRICS for r in ("A_beta2020", "B_dcic2021")])
-log("逐行三口径底表已写")
+log("per-row three-caliber table written")
 
 
 # ───────────────────────────── 7. non-overlapping cohort replication ─────────────
-log("non-overlapping cohort replication（保持同一 reference-pair）...")
+log("non-overlapping cohort replication (same reference pair) ...")
 drugs_unique = np.array(sorted(set(P_drugs.tolist())), dtype=object)
-log("  P* 涉及药物 %d 个" % len(drugs_unique))
+log("  P* involves %d drugs" % len(drugs_unique))
 
 cohort_rows = []
 summary["cohort_replication"] = {}
@@ -408,11 +408,11 @@ for K in N_COHORT_DRUGS_SPLIT:
                                 delta_cosine=ent["cosine"]["delta"],
                                 pearson_excludes_zero=ent["pearson"]["excludes_zero"]))
         ok = ok and ent["pearson"]["excludes_zero"]
-    # 交叉一致性 / 异质性
+    # cross-cohort consistency / heterogeneity
     deltas = np.array([e["pearson"]["delta"] for e in rec["per_cohort"]], dtype=np.float64)
     low = np.array([e["pearson"]["ci95"][0] for e in rec["per_cohort"]], dtype=np.float64)
     high = np.array([e["pearson"]["ci95"][1] for e in rec["per_cohort"]], dtype=np.float64)
-    # I^2 类异质性（用每个 cohort 的 CI 宽度反推 se）
+    # I^2-like heterogeneity (infer se from each cohort's CI width)
     se = (high - low) / (2 * 1.959964)
     wts = 1.0 / np.maximum(se ** 2, 1e-12)
     pooled = float((wts * deltas).sum() / wts.sum())
@@ -428,7 +428,7 @@ for K in N_COHORT_DRUGS_SPLIT:
         "fixed_effect_pooled": round(pooled, 6),
         "Q": round(Q, 4), "I2_pct": round(I2, 2)}
     summary["cohort_replication"]["K%d" % K] = rec
-    log("  K=%d: 每 cohort Δ(pearson)=%s  全部 CI 不跨0=%s  符号一致=%s  pooled=%.4f  I²=%.1f%%"
+    log("  K=%d: per-cohort Δ(pearson)=%s  all CIs exclude 0=%s  signs agree=%s  pooled=%.4f  I2=%.1f%%"
         % (K, np.round(deltas, 4).tolist(), ok, rec["consistency"]["all_cohorts_same_sign"], pooled, I2))
 
 with open(os.path.join(OUT, "frozen_cohort_replication.csv"), "w", newline="", encoding="utf-8") as f:

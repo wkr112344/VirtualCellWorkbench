@@ -1,8 +1,8 @@
 """I_product_decomposition.py  (I)  --  chunked / memory-bounded
-两套 Level-5 ground-truth 产品 (beta_v2 y.npy 158094x12328, 2021 y.npy 156931x12328)
-按 (cell_name, drug_id) 对齐；共同产品 = 156,760（全交集，比主分析 11,275 可评对更大，
-覆盖完整共同产品群）。逐产品计算 beta2020 与 dcic2021 谱间逐基因 Pearson = 该产品两参考一致性，
-再按 cell / drug 分解。分块处理避免一次性载入 ~30GB。
+The two Level-5 ground-truth products (beta_v2 y.npy 158094x12328, 2021 y.npy 156931x12328)
+are aligned by (cell_name, drug_id); common products = 156,760 (the full intersection, larger than the 11,275 evaluable pairs in the main analysis,
+covering the complete common product population). Per product, compute the across-gene Pearson between the beta2020 and dcic2021 profiles = that product's two-reference agreement,
+then decompose by cell / drug. Chunked processing avoids loading ~30 GB at once.
 """
 import numpy as np, csv, os, json
 from collections import defaultdict

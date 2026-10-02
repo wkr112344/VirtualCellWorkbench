@@ -1,16 +1,16 @@
-"""两条补丁：
+"""Two patches:
 
-A. 独立 bootstrap pair（within-reference 稳定性，2000 轮，每轮两份独立 resample）
-   → 直接得到 within-β / within-dcic 的 Spearman 分布与 top-k overlap 分布，并据此重生成 S17。
+A. independent bootstrap pairs (within-reference stability, 2000 rounds, two independent resamples per round)
+   -> directly yields the Spearman and top-k overlap distributions for within-beta / within-dcic, and regenerates S17 from them.
 
-B. 2×2 model comparison 的 crossed bootstrap（drug × cell 同时重采样）
-   四格：beta-trained→beta、beta-trained→dcic、dcic-trained→beta、dcic-trained→dcic
+B. crossed bootstrap for the 2x2 model comparison (resampling drug x cell simultaneously)
+   four cells: beta-trained->beta, beta-trained->dcic, dcic-trained->beta, dcic-trained->dcic
    D_β = r(βtrain,βref) − r(dcic-train,βref)，D_dcic = r(βtrain,dcicref) − r(dcic-train,dcicref)
    I = D_β − D_dcic
-   报告：D_β>0 且 D_dcic<0 的比例（反转是否保持）、I 的 crossed 95% CI。
+   reports: the fraction with D_beta>0 and D_dcic<0 (whether the reversal holds), and the crossed 95% CI for I.
 
-数据：GigaScience_Submission_Upload/supplementary/frozen_multimetric_perrow_scores.csv（11,275 行，63 细胞 × 2,037 药物）
-输出：within_reference_pair_stability.csv、crossed_bootstrap_2x2.csv、S17/S20 更新
+Data: GigaScience_Submission_Upload/supplementary/frozen_multimetric_perrow_scores.csv(11,275 rows, 63 cells x 2,037 drugs)
+Output: within_reference_pair_stability.csv, crossed_bootstrap_2x2.csv, S17/S20 updates
 """
 import numpy as np
 import pandas as pd
@@ -30,7 +30,7 @@ drugs = np.sort(d.drug.unique()); cells = np.sort(d.cell.unique())
 di = {x: i for i, x in enumerate(drugs)}; ci = {x: i for i, x in enumerate(cells)}
 N, C = len(drugs), len(cells)
 
-# ---------- 预排：每药行值（pad 到最大行数）与每 (drug,cell) 之和/计数 ----------
+# ---------- pre-arrange: per-drug row values (padded to max) and per (drug,cell) sums/counts ----------
 d['_di'] = d.drug.map(di); d['_ci'] = d.cell.map(ci)
 counts = np.zeros(N, dtype=int)
 for i, n in d.groupby('_di').size().items():
@@ -47,13 +47,13 @@ for k, c in enumerate(COLS.values()):
     for idx, (i, v) in enumerate(zip(d['_di'].to_numpy(), vals)):
         arr[i, pos[i]] = v; pos[i] += 1
     pad[c] = arr
-np.add.at(ncnt, (d['_di'].to_numpy(), d['_ci'].to_numpy()), 1.0)   # 计数只累加一次
+np.add.at(ncnt, (d['_di'].to_numpy(), d['_ci'].to_numpy()), 1.0)   # count accumulated exactly once
 for c in COLS.values():
     np.add.at(sums[c], (d['_di'].to_numpy(), d['_ci'].to_numpy()), d[c].to_numpy(float))
-assert ncnt.sum() == len(d), 'ncnt 行数不符: %s vs %s' % (ncnt.sum(), len(d))
+assert ncnt.sum() == len(d), 'ncnt row count mismatch: %s vs %s' % (ncnt.sum(), len(d))
 
 def row_boot_means(col, rng_):
-    """行级重采样（每药重采样 n_i 行）→ 药物分数向量。"""
+    """Row-level resampling (resample n_i rows per drug) -> the drug score vector."""
     A = pad[col]
     idx = rng_.integers(0, counts[:, None], size=(N, nmax))
     picked = np.take_along_axis(A, idx, axis=1)
@@ -66,8 +66,8 @@ def row_boot_means(col, rng_):
 def rank_spearman(a, b):
     return float(np.corrcoef(pd.Series(a).rank(), pd.Series(b).rank())[0, 1])
 
-# ================= A. 独立 bootstrap pair =================
-print('=== A. within-reference 独立 bootstrap pair（%d 轮）===' % ROUNDS)
+# ================= A. independent bootstrap pairs =================
+print('=== A. within-reference independent bootstrap pairs (%d rounds) ===' % ROUNDS)
 res = {}
 for tag in ['beta', 'dcic']:
     col = COLS[tag]
@@ -84,11 +84,11 @@ for tag in ['beta', 'dcic']:
         ov[10].mean(), np.percentile(ov[10], 2.5), np.percentile(ov[10], 97.5),
         ov[204].mean(), np.percentile(ov[204], 2.5), np.percentile(ov[204], 97.5)))
 
-# 观测跨参考（同一 2,037 药物集合）
+# observed cross-reference (same 2,037-drug set)
 obs = {tag: np.array([pad[COLS[tag]][i, :counts[i]].mean() for i in range(N)]) for tag in ['beta', 'dcic']}
 o_b = np.argsort(-obs['beta'], kind='stable'); o_d = np.argsort(-obs['dcic'], kind='stable')
 cross = {k: len(set(o_b[:k]) & set(o_d[:k])) for k in KS}
-print('  观测跨参考 Spearman %.4f | top-10 %d | top-204 %d' % (
+print('  observed cross-reference Spearman %.4f | top-10 %d | top-204 %d' % (
     rank_spearman(obs['beta'], obs['dcic']), cross[10], cross[204]))
 
 rows = []
@@ -105,14 +105,14 @@ for k in KS:
                  'random_expected': k * k / N, 'rounds': ROUNDS})
 pd.DataFrame(rows).to_csv('gigascience_upload_work/within_reference_pair_stability.csv', index=False)
 pd.DataFrame(rows).to_csv(SUP / 'S17_within_reference_topk_stability.csv', index=False)
-print('  → S17 已按独立 pair 口径重生成（%d 轮）' % ROUNDS)
-print('  within-β Spearman 分布: %.4f [%.4f, %.4f]；within-dcic: %.4f [%.4f, %.4f]' % (
+print('  -> S17 regenerated under the independent-pair caliber (%d rounds)' % ROUNDS)
+print('  within-beta Spearman distribution: %.4f [%.4f, %.4f]; within-dcic: %.4f [%.4f, %.4f]' % (
     res['beta']['rho'].mean(), np.percentile(res['beta']['rho'], 2.5), np.percentile(res['beta']['rho'], 97.5),
     res['dcic']['rho'].mean(), np.percentile(res['dcic']['rho'], 2.5), np.percentile(res['dcic']['rho'], 97.5)))
 
 # ================= B. 2×2 crossed bootstrap =================
 print()
-print('=== B. 2×2 model comparison 的 crossed（drug × cell）bootstrap（%d 轮）===' % ROUNDS)
+print('=== B. crossed (drug x cell) bootstrap for the 2x2 model comparison (%d rounds) ===' % ROUNDS)
 B2 = 2000
 draws = {c: np.empty(B2) for c in ['b_b', 'b_d', 'd_b', 'd_d']}
 D_beta = np.empty(B2); D_dcic = np.empty(B2); I = np.empty(B2)
@@ -140,10 +140,10 @@ for name, v, point in [('D_beta (beta ref)', D_beta, obsD_b),
     print('  %-20s point %+.4f  crossed 95%% CI [%+.4f, %+.4f]  SD %.4f  P(>0)=%.4f P(<0)=%.4f' % (
         name, point, lo, hi, v.std(ddof=1), (v > 0).mean(), (v < 0).mean()))
 both = int(((D_beta > 0) & (D_dcic < 0)).sum())
-print('  ★ 反转保持（D_β>0 且 D_dcic<0）: %d / %d = %.4f' % (both, B2, both / B2))
+print('  * reversal holds (D_beta>0 and D_dcic<0): %d / %d = %.4f' % (both, B2, both / B2))
 for c, k in [('b_b', 'beta-trained→beta'), ('b_d', 'beta-trained→dcic'),
              ('d_b', 'dcic-trained→beta'), ('d_d', 'dcic-trained→dcic')]:
     print('  %-22s mean %.4f  CI [%.4f, %.4f]' % (k, draws[c].mean(), *np.percentile(draws[c], [2.5, 97.5])))
 pd.DataFrame(tab).to_csv('gigascience_upload_work/crossed_bootstrap_2x2.csv', index=False)
 pd.DataFrame(tab).to_csv(SUP / 'S20_lincs_crossed_2x2_model_comparison.csv', index=False)
-print('  → S20 已写入')
+print('  -> S20 written')

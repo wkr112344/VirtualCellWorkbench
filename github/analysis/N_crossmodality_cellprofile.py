@@ -1,12 +1,12 @@
 """N_crossmodality_cellprofile.py  (N)
-β2020 LINCS Level5 两套扰动模态的 per-cell 均值谱相关性（注意：两者同属 β2020 这一个发布，并非两个 release）：
-  - trt_cp : 化合物（化学）扰动，sig_id 形如 'ABY001_A375_XH:BRD-<drug>:dose:time'（BRD- 为 Broad 化合物 ID）
-  - trt_sh : shRNA（遗传）敲低，sig_id 形如 'CGS001_A375_96H:<GENE>:1'（基因为扰动对象）
-解析每个 sig_id 的细胞系（prefix 'ABY001_A375_XH' -> 'A375'），分别按 cell 聚合平均扰动谱，
-再对共同细胞系计算两套 cell-mean 谱的 Pearson =
-同一 β2020 发布内、跨扰动模态（化合物 vs 遗传）的细胞身份轴相关性。
-关键校正：这不是"跨发布一致性"或"同谱系发布一致性"检查——trt_cp 与 trt_sh 是不同扰动模态，
-且两者本就是同一个 β2020 release（只在扰动类型上不同，不在发布版本上不同）。
+Per-cell mean-profile correlation between the two perturbation modalities in beta2020 LINCS Level5 (note: both belong to the single beta2020 release, not two releases):
+  - trt_cp : compound (chemical) perturbation, sig_id like 'ABY001_A375_XH:BRD-<drug>:dose:time' (BRD- is a Broad compound ID)
+  - trt_sh : shRNA (genetic) knockdown, sig_id like 'CGS001_A375_96H:<GENE>:1' (the gene is the perturbation target)
+parse each sig_id's cell line (prefix 'ABY001_A375_XH' -> 'A375'), aggregate the mean perturbation profile per cell,
+then compute the Pearson of the two cell-mean profiles over common cell lines =
+the cell-identity-axis correlation across perturbation modalities (compound vs genetic) within the same beta2020 release.
+Key correction: this is not a "cross-release consistency" or "same-lineage-release consistency" check -- trt_cp and trt_sh are different perturbation modalities,
+and both are the same beta2020 release to begin with (differing only in perturbation type, not in release version).
 """
 import h5py, numpy as np, csv, os, json
 from collections import defaultdict

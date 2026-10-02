@@ -1,12 +1,12 @@
-"""核验：全基因残差化 vs 基因子集残差化，训练×评价交互是否都等于 −0.00047。
+"""Verification: whether whole-gene residualization vs gene-subset residualization both give a training x evaluation interaction of -0.00047.
 
-口径完全照 `GigaScience_Reproducibility_Package/analysis_code/as_supplied/depmap_background_control.py`：
-  · 参考矩阵先按 common_observed_mask 与非缺失值构建观测矩阵 obs (136×17,393)；
-  · 四格共用同一掩码 Mt（同一细胞下四个相关系数用同一基因集）；
-  · 残差化：预测减自身训练臂的逐基因均值，参考减其训练集逐基因均值；
-  · 逐细胞交互 I(i)=[CC−CH]−[HC−HH] → 种子内取中位数 → 五种子取均值。
+Calibers follow `.../as_supplied/depmap_background_control.py` exactly:
+  - the reference matrices first build an observed matrix obs (136x17,393) from common_observed_mask and non-missing values;
+  - the four cells share the same mask Mt (the same gene set is used for the four correlations within a cell);
+  - residualization: subtract the per-gene mean of its own training arm from the prediction, and that of the training set from the reference;
+  - per-cell interaction I(i)=[CC-CH]-[HC-HH] -> median within a seed -> mean over the five seeds.
 
-输出：全基因与各"子集"定义下的残差值对照。
+Output: residual values under the whole-gene definition and each "subset" definition, side by side.
 """
 import numpy as np
 from pathlib import Path
@@ -42,18 +42,18 @@ def interaction_residualized(M):
 
 
 if __name__ == '__main__':
-    print('观测结构：全部 136 细胞都观测到的基因 %d 个；存在缺失的基因 %d 个（占 %.1f%%）'
+    print('observation structure: %d genes observed in all 136 cells; %d genes with missingness (%.1f%%)'
           % ((frac == 1).sum(), (frac < 1).sum(), 100*(frac < 1).mean()))
     print()
-    print('%-44s %-14s %s' % ('口径', '残差交互', '逐种子中位数'))
+    print('%-44s %-14s %s' % ('caliber', 'residual interaction', 'per-seed medians'))
     m, ps = interaction_residualized(obs)
-    print('%-44s %+.8f   %s' % ('全部基因（原始口径，四格共用掩码）', m, np.round(ps, 5).tolist()))
-    for th, name in [(1.0, '仅保留 136 细胞全观测的基因'), (0.99, '观测率 ≥99%'), (0.95, '观测率 ≥95%'),
-                     (0.90, '观测率 ≥90%'), (0.50, '观测率 ≥50%')]:
+    print('%-44s %+.8f   %s' % ('all genes (original caliber, shared four-cell mask)', m, np.round(ps, 5).tolist()))
+    for th, name in [(1.0, 'genes observed in all 136 cells'), (0.99, 'observation rate >=99%'), (0.95, 'observation rate >=95%'),
+                     (0.90, 'observation rate >=90%'), (0.50, 'observation rate >=50%')]:
         sel = obs & (frac >= th)[None, :]
         m2, ps2 = interaction_residualized(sel)
-        print('%-44s %+.8f   %s   (基因数 %d)' % (name, m2, np.round(ps2, 5).tolist(), int((frac >= th).sum())))
+        print('%-44s %+.8f   %s   (%d genes)' % (name, m2, np.round(ps2, 5).tolist(), int((frac >= th).sum())))
     print()
-    print('注：17,393 个基因中只有 %d 个（%.1f%%）存在细胞级缺失，'
-          '因此任何低于 100%% 的观测率阈值都等价于"全部基因"，数值必然相同。'
+    print('Note: only %d of the 17,393 genes (%.1f%%) have cell-level missingness,'
+          'so any observation-rate threshold below 100%% is equivalent to "all genes" and the values are necessarily identical.'
           % ((frac < 1).sum(), 100*(frac < 1).mean()))

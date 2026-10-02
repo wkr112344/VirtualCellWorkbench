@@ -5,11 +5,11 @@ type: software
 authors:
   - family-names: Wei
     given-names: Kairui
-  # TODO: 补全其余作者（Lijing Zhan、Canyang Qi 等）与 ORCID
+  # TODO: add the remaining authors (Lijing Zhan, Canyang Qi, ...) and ORCIDs
 version: "1.0.0"
-date-released: "2026-10-03"          # TODO 按实际发布日
-repository-code: "https://github.com/<账号>/<仓库>"   # TODO
+date-released: "2026-10-03"          # TODO set to the actual release date
+repository-code: "https://github.com/<account>/<repository>"   # TODO
 identifiers:
   - type: doi
-    value: "10.5281/zenodo.<待分配>"   # TODO Zenodo 发布后回填
-license: MIT                          # TODO 确认代码许可
+    value: "10.5281/zenodo.<to-be-assigned>"   # TODO fill in after Zenodo publication
+license: MIT                          # TODO confirm the code license

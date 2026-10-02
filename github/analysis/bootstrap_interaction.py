@@ -1,6 +1,6 @@
-# interaction 的 cell-bootstrap CI（5000×）
-#   interaction = (median_CC - median_CH) - (median_HC - median_HH)，每个 replicate 独立重采样 test 细胞
-#   raw 与 per-gene residualized 两口径；对象：Ridge / Frozen / Permuted
+# cell-bootstrap CI for the interaction (5000x)
+#   interaction = (median_CC - median_CH) - (median_HC - median_HH); each replicate independently resamples test cells
+#   two calibers, raw and per-gene residualized; objects: Ridge / Frozen / Permuted
 import csv, json, os
 import numpy as np
 
@@ -35,7 +35,7 @@ for key, kname in [("r_raw", "raw"), ("r_shift", "shift"), ("r_zres", "zres")]:
         lo, hi = np.percentile(boot, [2.5, 97.5])
         obj[name] = {"point": point, "ci95": [float(lo), float(hi)],
                      "excludes_zero": bool(lo * hi > 0), "n_cells": len(cells)}
-        print("%-6s %-5s I=%+.4f CI[%+.4f,%+.4f] 排零=%s"
+        print("%-6s %-5s I=%+.4f CI[%+.4f,%+.4f] excludes0=%s"
               % (kname, name, point, lo, hi, lo * hi > 0))
     out[kname] = obj
 json.dump(out, open(os.path.join(B, "results", "interaction_bootstrap.json"), "w"), indent=2)

@@ -1,10 +1,10 @@
 """F_within_product_reproducibility.py  (F)
-Desktop Level5 (MODZ GSE92742, 473647 sig_ids x 12328 genes) 上做"产品内可重复性"代理：
-把每个 sig_id 解析为 (cell, pert) 产品（id 形如 'CPC005_A375_6H:BRD-..:10'），
-对含 >=2 个实例的产品，计算其各实例基因谱之间的平均两两 Pearson = 产品内一致性。
-随机抽 4000 个多实例产品估计分布。
-注意：Level5 已是 replicate 共识层，实例间差异混有 dose/time 异质性；且无 technical-replicate
-split 可用 -> 这是"产品内可重复性/结构一致性"的上界代理（S14.5 指出的 noise baseline 缺口的近似填补）。
+A within-product reproducibility proxy on Desktop Level5 (MODZ GSE92742, 473647 sig_ids x 12328 genes):
+parse each sig_id into a (cell, pert) product (id like 'CPC005_A375_6H:BRD-..:10'),
+for products with >=2 instances, compute the mean pairwise Pearson between their instance profiles = within-product consistency.
+Randomly sample 4,000 multi-instance products to estimate the distribution.
+Note: Level5 is already a replicate-consensus layer, so between-instance differences mix in dose/time heterogeneity; and no technical-replicate
+split is available -> this is an upper-bound proxy for "within-product reproducibility / structural consistency" (an approximate fill for the noise-baseline gap noted in S14.5).
 """
 import h5py, numpy as np, csv, os, json, random
 from collections import defaultdict
