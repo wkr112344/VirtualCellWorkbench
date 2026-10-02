@@ -1,7 +1,7 @@
 # Supplementary material index (GigaScience submission clean-up, v5)
 
-Main text: **"Benchmark robustness under published processed reference products: a reproducible analysis of
-LINCS L1000 and DepMap"**
+Main text: **"How differently generated evaluation matrices shape biomedical model performance, model comparison,
+drug ranking and candidate selection: a cross-ecosystem analysis of LINCS, DepMap and GTEx"**
 
 This submission package keeps only the files that directly correspond to the current main-text claims. Earlier
 exploratory material such as LayerDiag, CPI, cancer/non-cancer stratification, the genetics side, and old

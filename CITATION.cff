@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "How the choice of processed reference product shapes biomedical model benchmarking and candidate selection: a cross-ecosystem analysis (LINCS, DepMap, GTEx)"
+title: "How differently generated evaluation matrices shape biomedical model performance, model comparison, drug ranking and candidate selection: a cross-ecosystem analysis of LINCS, DepMap and GTEx"
 message: "If you use this code or data, please cite both the paper and the Zenodo record."
 type: software
 authors:

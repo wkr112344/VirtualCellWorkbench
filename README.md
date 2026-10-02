@@ -1,4 +1,4 @@
-# How the choice of processed reference product shapes biomedical model benchmarking and candidate selection — reproduction materials
+# How differently generated evaluation matrices shape biomedical model performance, model comparison, drug ranking and candidate selection: a cross-ecosystem analysis of LINCS, DepMap and GTEx — reproduction materials
 
 This directory has two parts:
 
