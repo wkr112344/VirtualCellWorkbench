@@ -1,4 +1,4 @@
-﻿analysis_set,training_product,evaluation_product,PCC,ci95_low,ci95_high,within_training_beta_minus_dcic,contrast_ci95_low,contrast_ci95_high
+analysis_set,training_product,evaluation_product,PCC,ci95_low,ci95_high,within_training_beta_minus_dcic,contrast_ci95_low,contrast_ci95_high
 main_11275,beta-trained,beta,0.368,0.3627,0.3733,0.2956,0.2917,0.2996
 main_11275,beta-trained,dcic2021,0.0724,0.0683,0.0765,,,
 main_11275,dcic-trained,beta,0.1705,0.1652,0.1757,0.0171,0.014,0.0204

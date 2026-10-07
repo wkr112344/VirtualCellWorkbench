@@ -1,4 +1,4 @@
-﻿category,metric,vs_CERES,vs_Chronos,delta_eval,ci95_low,ci95_high,random_baseline_if_applicable,preferred_direction
+category,metric,vs_CERES,vs_Chronos,delta_eval,ci95_low,ci95_high,random_baseline_if_applicable,preferred_direction
 Correlation,Mean per-cell-line Pearson,0.8595,0.8226,0.0369,0.0342,0.0398,,higher
 Correlation,Median per-cell-line Pearson,0.8664,0.8307,0.0357,0.0311,0.0399,,higher
 Correlation,Median per-cell-line Spearman,0.8502,0.8263,0.0238,0.0197,0.0273,,higher

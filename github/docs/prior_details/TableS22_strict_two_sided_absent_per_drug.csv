@@ -1,4 +1,4 @@
-﻿drug,in_frozen_holdout,fp_duplicate_in_train,pcc_A_beta2020_12328,pcc_B_dcic2021_12328,pcc_A_beta2020_978,pcc_B_dcic2021_978
+drug,in_frozen_holdout,fp_duplicate_in_train,pcc_A_beta2020_12328,pcc_B_dcic2021_12328,pcc_A_beta2020_978,pcc_B_dcic2021_978
 BRD-A02990301,0,1,0.322445,0.084442,0.41533,0.017846
 BRD-A03623303,0,1,0.353658,0.04628,0.374418,0.003969
 BRD-A03816571,0,1,0.440838,0.106027,0.390155,0.067819

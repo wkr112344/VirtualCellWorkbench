@@ -1,4 +1,4 @@
-﻿section,metric,value,share_of_heldout_drugs,caliber_note
+section,metric,value,share_of_heldout_drugs,caliber_note
 S19.1,total held-out drugs,3204,100%,"official last 10%, drug-level split; 28,835 drugs in the training set"
 S19.1,bit-identical ECFP4 fingerprint twin in the training set,2284,71.3%,"the recomputable fact of ""bit-identical fingerprint"", not a chemical judgment"
 S19.1,structurally genuinely novel (no identical fingerprint in training),920,28.7%,= 3204 - 2284
