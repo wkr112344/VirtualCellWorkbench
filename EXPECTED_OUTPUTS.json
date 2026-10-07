@@ -35,6 +35,13 @@
     "disease_boundary_band": [
       11,
       13
+    ],
+    "residualized_D_beta": 0.13218,
+    "residualized_D_dcic": -0.06473,
+    "residualized_interaction_I": 0.19691,
+    "residualized_interaction_I_ci": [
+      0.18487,
+      0.20731
     ]
   },
   "depmap": {

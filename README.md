@@ -10,7 +10,7 @@ This directory has two parts:
 1. Download `zenodo/source_data/` from the Zenodo records: frozen prediction matrices, DepMap-derived data,
    per-sample GTEx scores, and figure source data.
 2. Clone the code repository from GitHub and run `pip install -r requirements.txt`.
-3. Run `run_all.sh`: the scripts recompute Tables 1–4, Figures 1–6 and Supplementary Tables S1–S22 in order,
+3. Run `run_all.sh`: the scripts recompute Tables 1–5, Figures 1–7 and Supplementary Tables S1–S26b in order,
    and compare each key number against `EXPECTED_OUTPUTS.json` (tolerance 5×10⁻⁴).
 4. For the parts that must be rerun from the raw public data (LINCS level-5, DepMap 21Q2, GTEx v11), see
    `DATA_SOURCES.md`. For the LINCS side, the exported reference matrices and the `inst_id` lists are provided,

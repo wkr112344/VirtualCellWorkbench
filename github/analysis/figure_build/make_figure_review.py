@@ -1,5 +1,19 @@
-"""Rebuild the author figure review for the final 7-figure set."""
+"""Rebuild the author figure review (Chinese) for the current 7-figure set.
+
+Figure set = the 7 main figures of the submission package (Figure 1-7).
+Captions are read from author_notes/captions_from_package.json, which holds the
+verbatim caption text of the current manuscript (7 entries, numbered 1-7). Keeping
+a single source means this review can never drift from the manuscript again.
+
+The figures/ directory still contains three superseded files under their old names
+(Figure5_lincs_heterogeneity, Figure6_depmap_mechanism_control,
+Figure7_gtex_reference_matching). They are listed on purpose and skipped, because
+historical scripts still reference them. Do not delete them blindly; the current
+Figure 5-7 are Figure5_depmap_mechanism_control, Figure6_gtex_reference_matching and
+Figure7_lincs_gene_mean_residualized.
+"""
 from pathlib import Path
+import json
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -14,69 +28,59 @@ R = Path(__file__).resolve().parents[1]
 F, A, P = R / "figures", R / "author_notes", R / "preview"
 CJK = "Microsoft YaHei"
 
+# Current main figures, in manuscript order 1-7. Names must match submission_package/figures/.
 FILES = ["Figure1_design", "Figure2_fixed_output", "Figure3_training_evaluation",
-         "Figure4_ranking_consequence", "Figure5_lincs_heterogeneity",
-         "Figure6_depmap_mechanism_control", "Figure7_gtex_reference_matching"]
+         "Figure4_ranking_consequence", "Figure5_depmap_mechanism_control",
+         "Figure6_gtex_reference_matching", "Figure7_lincs_gene_mean_residualized"]
 
-CAPS = [
-    ("Figure 1  Study design",
-     "Three data systems each compare the reference products of drug-perturbation transcriptomes, cancer dependencies and normal-tissue expression quantification. "
-     "Within each system the common evaluation objects and gene space are held fixed. DepMap frozen output and controlled training are different branches; "
-     "GTEx splits training and test by donor. The three branches address complementary questions and cannot be merged into independent repeats of one task."),
-    ("Figure 2  LINCS fixed-output sensitivity: distribution -> scatter -> exemplars -> multi-model",
-     "A: reference-vs-reference density scatter for 2,037 drugs (hexbin + marginal distributions; the diagonal = no difference; "
-     "2031/2037 drugs shift in the same direction). "
-     "B: per-drug Δ ridgelines aligned across three calibers (Pearson/Spearman/cosine, each annotated with its median and positive-difference fraction). "
-     "C: exemplar-drug small multiples -- per-cell two-reference score scatters for the 3 most sensitive and 3 relatively stable drugs. "
-     "D: within-evaluation-set differences for the seven prediction sources (own - dcic2021) with paired 95% CIs."),
-    ("Figure 3  Training x reference interaction and drug-level reversal",
-     "A: drug-level distributions for the four states (2x2; medians 0.353 / 0.054 / 0.155 / 0.134). "
-     "B: drug-level reversal quadrant -- x = the beta-trained advantage under the beta reference, y = under the dcic reference; "
-     "the reversal fraction is annotated in the panel. C: per-drug interaction distribution [(bb - bD) - (Db - DD)], "
-     "vertical line = overall interaction 0.2785 [0.2741, 0.2828]. "
-     "D: score collapse of the 5 drugs with the largest rank drop within the beta top-50 (the number after the arrow is the rank under dcic2021)."),
-    ("Figure 4  Ranking consequences and biological priority",
-     "A: top-k retention and overlapping candidates (solid = observed, dashed = random k/N; only 3/10 overlap at k = 10). "
-     "B: rank flow of the union of the two references' top-10 candidates: blue band = the 3 shared drugs, grey/orange bands = the 7 unique to each list. "
-     "C: shortlist membership matrix -- drug ranks within the top-10 of Global and three disease contexts (Liver/Thyroid ATC/APL); "
-     "colour encodes rank (log10 scale, grey = not in list; HALLMARK lists are not in the package and are not shown). "
-     "D: summary of rank Spearman and top-10 overlap across the 10 contexts. E: agreement vs list-stability scatter."),
-    ("Figure 5  LINCS heterogeneity: landscape -> ranking -> structure -> distribution -> exemplars",
-     "A: ordered landscape of 63 cell lines x [beta2020, dcic2021, Δ, response count] (sorted by descending Δ, colour scale clipped at the 97th percentile). "
-     "B: ranking caterpillar -- the mean Δ per cell line (point size proportional to response count, dashed line = equal-weight mean 0.277). "
-     "C: drug x cell Δ matrix (transposed: rows = 63 cell lines, columns = the 36 drugs covering >=25 cells, columns ordered by hierarchical clustering, "
-     "every 6th column labelled with a drug index; the full list is in TableS_drug_coverage_matrix_drugs.csv). "
-     "D: unit-level distributions (per-drug and per-cell aligned ridgelines, medians 0.294 / 0.240). "
-     "E: exemplar-cell distributions (the 2 most sensitive + the 2 most stable, n >= 20)."),
-    ("Figure 6  DepMap mechanism + positive control: raw background -> residualization -> signal resolution",
-     "A: Frozen model raw per-cell distributions (four states, 136 cells). "
-     "B: paired difference between the model and the training-set gene-mean baseline (~0, showing the raw score is driven by a stable gene background). "
-     "C: Frozen residualized per-cell distributions (same layout as A, collapsing to ~0). "
-     "D: per-gene across-cell r distributions for 17,393 genes (Expr Ridge / Frozen / Permuted). "
-     "E: positive-control per-cell residual distributions (Expr Ridge retains 0.216/0.277, Frozen and Permuted ~0). "
-     "F: bootstrap distributions of the interaction from raw to residualized (Frozen with 10,000 draws, "
-     "Ridge/Permuted with per-cell resampling; +0.0563 -> -0.0005 and +0.0620 -> +0.3057)."),
-    ("Figure 7  GTEx cross-ecosystem generalization: distribution -> donor -> summary -> uncertainty -> tissue structure",
-     "A: four-state ridgeline distributions of per-sample across-gene Pearson for 3,963 test samples (RR/RE/ER/EE). "
-     "B: the same as A in the Spearman caliber. "
-     "C: same-origin reference advantage raincloud over 189 donors (median/IQR/positive-direction fraction). "
-     "D: compact 2x2 summary (interaction = 0.07096). "
-     "E: interaction distribution from 5,000 donor bootstraps (Pearson 0.07096 [0.07050, 0.07164]; "
-     "Spearman 0.06186 [0.06132, 0.06224]). "
-     "F: 68-tissue x 5-column summary matrix (blocks coloured by organ system, ordered within a group by the Pearson interaction; "
-     "columns: Pearson/Spearman interaction, donor count, the two references' matched advantage)."),
-]
+# Superseded files still sitting in figures/ under their pre-7-figure names.
+RETIRED = {"Figure5_lincs_heterogeneity", "Figure6_depmap_mechanism_control",
+           "Figure7_gtex_reference_matching"}
+
+
+def load_captions():
+    """Read the 7 manuscript captions verbatim; never hand-write them here.
+
+    Returns (title, body, full) per figure: `body` drops the "图 N　" prefix for the
+    per-figure page (the number is already a bold heading there), while `full` keeps it
+    so the appendix section can be pasted straight back into the manuscript.
+    """
+    raw = json.loads((A / "captions_from_package.json").read_text(encoding="utf8"))
+    if len(raw) != len(FILES):
+        raise SystemExit(f"expected {len(FILES)} captions, found {len(raw)}")
+    caps = []
+    for i, cap in enumerate(raw, 1):
+        head = f"图 {i}　"
+        if not cap.startswith(head):
+            raise SystemExit(f"caption {i} does not start with {head!r}: {cap[:20]!r}")
+        caps.append((f"图 {i}", cap[len(head):], cap))
+    return caps
+
+
+CAPS = load_captions()
+
+# Guard against silently drifting back to the old 8/7-plus-supplementary naming: the
+# current set and the retired set must not overlap, and every current figure must exist.
+assert not (RETIRED & set(FILES)), f"current/retired overlap: {RETIRED & set(FILES)}"
+_missing = [n for n in FILES if not (F / (n + ".png")).is_file()]
+if _missing:
+    raise SystemExit(f"missing figure files: {_missing}")
 
 
 CHECKLIST = [
-    ("Main figures compressed from 8 to 7 (evidence re-ordering)", "Each main figure answers one complete scientific question; purely summary/CI panels are moved out of the main figures."),
-    ("Observation-level data becomes the main visual", "2,037 drugs / 63 cells / 136 test cells / 17,393 genes / 3,963 samples / 189 donors / 68 tissues are shown directly."),
-    ("dcic-trained per-drug scores recovered", "recomputed in place from the archived frozen prediction matrices + the original reference cache (11,275 rows; the max difference of per-drug means vs C_perdrug_stability is 6.5e-07, "
-     "matching the TableS25 aggregates 0.1705/0.1534) -- so Figure 3's distributions/quadrant/interaction distribution use real data."),
-    ("Fig 6 merges mechanism and positive control", "Raw/Residualized two columns + a unified visual grammar for the three models Frozen/Expr Ridge/Permuted, closing the loop over six panels."),
-    ("Fig 7 returns to distribution first", "Four-state ridgeline (Pearson/Spearman two columns) + raincloud + compact 2x2 + bootstrap violin + the 68-tissue x 5-column structure matrix."),
-    ("Figure 1 kept as the original", "sha256 is bit-identical to the supplied file; not redrawn."),
-    ("Main text must be synced", "All captions of Figures 2-7 (new captions appended at the end) + figure-number references (original Figures 6/7/8 -> new 5/6/7)."),
+    ("图注与主稿同源", "本审阅件的 7 条图注逐字取自 author_notes/captions_from_package.json，"
+     "该文件内容等于现行主稿的图注原文，脚本不再自带任何图注文本。"),
+    ("图文件名为现行 7 图体系", "Figure1–7 与投稿包 figures/ 一一对应；"
+     "figures/ 下另有 3 个旧名文件（Figure5_lincs_heterogeneity、"
+     "Figure6_depmap_mechanism_control、Figure7_gtex_reference_matching）已退役，"
+     "仍被历史脚本引用，故保留但不使用。"),
+    ("图 4 口径已统一为全量 2,037", "A/B/C 面板与 D 面板的 Global 行同用全量 2,037 药物名单"
+     "（top-10 重合 3、Spearman 0.5675）；D 的疾病上下文行为 1,399 共同可评子集，"
+     "N 已逐行标在 y 轴标签上。"),
+    ("跨尺度数值不做直接相减", "raw 与 residualized 尺度的相关系数不可比大小；"
+     "匹配结构的结论只表述为「Ridge 仍保留 vs 冻结归零」，不使用「增强 / 放大」。"),
+    ("正文与图一致", "正文 7 条图注描述面板构成与统计口径，不复述面板内的具体数值，"
+     "因此改图不改图注。"),
 ]
 
 
@@ -105,31 +109,31 @@ def build_docx():
     st.font.name = CJK
     st.font.size = Pt(10.5)
     st.element.rPr.rFonts.set(qn("w:eastAsia"), CJK)
-    h = doc.add_paragraph(); r = h.add_run("Figure review (after main-figure evidence re-ordering, 7 figures)")
+    h = doc.add_paragraph(); r = h.add_run("图表审阅版（现行 7 张主图）")
     r.font.size = Pt(16); r.font.bold = True
     sub = doc.add_paragraph(); rs = sub.add_run(
-        "Completed the main-figure evidence re-ordering as instructed: 8 figures compressed to 7, each organized as "
-        "\"overview -> structure -> consequence/exemplar\", with purely summary/CI panels moved out of the main figures. "
-        "New captions for Figures 2-7 are at the end; the main-text captions and figure-number references must be synced.")
+        "图 1–7 与投稿包 figures/ 目录一一对应。7 条图注逐字取自 "
+        "author_notes/captions_from_package.json（即现行主稿的图注原文），"
+        "与主稿同源、不会漂移。文末附全部 7 条图注原文。")
     rs.font.size = Pt(9.5)
-    for name, (title, cap) in zip(FILES, CAPS):
+    for name, (title, body, _full) in zip(FILES, CAPS):
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(14)
         rr = p.add_run(title); rr.font.bold = True; rr.font.size = Pt(11.5)
         img = doc.add_paragraph(); img.alignment = WD_ALIGN_PARAGRAPH.CENTER
         img.add_run().add_picture(str(F / (name + ".png")), width=Cm(16.5))
-        cp = doc.add_paragraph(); cr = cp.add_run(disp(cap)); cr.font.size = Pt(9.5)
+        cp = doc.add_paragraph(); cr = cp.add_run(disp(body)); cr.font.size = Pt(9.5)
     doc.add_page_break()
-    p = doc.add_paragraph(); r = p.add_run("Re-ordering checklist for this round")
+    p = doc.add_paragraph(); r = p.add_run("图注与口径核对清单")
     r.font.bold = True; r.font.size = Pt(13)
     for k, v in CHECKLIST:
         para = doc.add_paragraph(style="List Bullet")
         a = para.add_run("√ " + k + "："); a.font.bold = True; a.font.size = Pt(10)
         b = para.add_run(v); b.font.size = Pt(10)
     doc.add_paragraph()
-    p = doc.add_paragraph(); r = p.add_run("New captions for Figures 2-7 (ready to replace the main text)")
+    p = doc.add_paragraph(); r = p.add_run("图 1–7 图注原文（取自主稿，可直接回填）")
     r.font.bold = True; r.font.size = Pt(13)
-    for title, cap in CAPS[1:]:
-        para = doc.add_paragraph(); rr = para.add_run(disp(cap)); rr.font.size = Pt(10)
+    for title, _body, full in CAPS:
+        para = doc.add_paragraph(); rr = para.add_run(disp(full)); rr.font.size = Pt(10)
         para.paragraph_format.space_after = Pt(8)
     doc.save(A / "Figure_Review_CN.docx")
     print("wrote", A / "Figure_Review_CN.docx")
@@ -141,34 +145,34 @@ def build_pdf():
     out = P / "Figure_Review_CN.pdf"
     with PdfPages(out) as pdf:
         fig = plt.figure(figsize=(8.27, 11.69))
-        fig.text(0.07, 0.94, "Figure review (after main-figure evidence re-ordering, 7 figures)", fontsize=19, weight="bold")
-        fig.text(0.07, 0.90, "Figure 1-7 - for GigaScience submission", fontsize=12, color="#444444")
-        body = ("Completed the main-figure evidence re-ordering as instructed, 8 figures compressed to 7:\n\n"
-                "- Figure 1: study design (unchanged).\n"
-                "- Figure 2: LINCS fixed-output sensitivity -- distribution / scatter / exemplars / multi-model.\n"
-                "- Figure 3: winner reversal and ranking consequences -- 2x2 / crossing / rank flow / top-k.\n"
-                "- Figure 4: LINCS heterogeneity and structure -- landscape / cell effects / context heatmap / ECDF.\n"
-                "- Figure 5: DepMap mechanism (original Figure 6).\n"
-                "- Figure 6: DepMap positive control (original Figure 8).\n"
-                "- Figure 7: GTEx generalization (unchanged).\n\n"
-                "File names synced: Figure4_heterogeneity / Figure5_depmap_mechanism /\n"
-                "Figure6_positive_control; the old files are retired.\n"
-                "The main-text captions and figure-number references must be synced (new captions appended at the end).\n"
-                "This PDF matches author_notes/Figure_Review_CN.docx.")
+        fig.text(0.07, 0.94, "图表审阅版（现行 7 张主图）", fontsize=19, weight="bold")
+        fig.text(0.07, 0.90, "Figure 1–7 · GigaScience 投稿用", fontsize=12, color="#444444")
+        body = ("图 1–7 与投稿包 figures/ 目录一一对应。\n\n"
+                "· 图 1：分析框架与三套数据的研究内容。\n"
+                "· 图 2：预测结果固定时两套评价矩阵产生的性能差异。\n"
+                "· 图 3：评价矩阵更换改变两个训练方案的性能比较结果。\n"
+                "· 图 4：评价矩阵更换、抽样波动与选择深度对药物排序与选择的影响。\n"
+                "· 图 5：DepMap 相关系数计算方式与基因均值去除。\n"
+                "· 图 6：GTEx 简单基线预测器的训练矩阵与评价矩阵匹配现象。\n"
+                "· 图 7：LINCS 去除基因均值前后评价矩阵差异的变化。\n\n"
+                "图注来源：author_notes/captions_from_package.json，\n"
+                "逐字等于现行主稿的 7 条图注，脚本不自带图注文本。\n"
+                "figures/ 下另有 3 个旧名文件已退役（仍被历史脚本引用，保留不用）。\n"
+                "本 PDF 与 author_notes/Figure_Review_CN.docx 内容一致。")
         fig.text(0.07, 0.84, wrap_cjk(body, 46), fontsize=10.5, va="top", linespacing=1.7)
         pdf.savefig(fig); plt.close(fig)
 
-        for name, (title, cap) in zip(FILES, CAPS):
+        for name, (title, body, _full) in zip(FILES, CAPS):
             im = Image.open(F / (name + ".png"))
             fig = plt.figure(figsize=(8.27, 11.69))
             fig.text(0.06, 0.965, disp(title), fontsize=12.5, weight="bold", va="top")
             ax = fig.add_axes([0.06, 0.26, 0.88, 0.68])
             ax.imshow(im); ax.axis("off")
-            fig.text(0.06, 0.225, wrap_cjk(disp(cap), 56), fontsize=9.5, va="top", linespacing=1.7)
+            fig.text(0.06, 0.225, wrap_cjk(disp(body), 56), fontsize=9.5, va="top", linespacing=1.7)
             pdf.savefig(fig); plt.close(fig)
 
         fig = plt.figure(figsize=(8.27, 11.69))
-        fig.text(0.06, 0.965, "Re-ordering checklist for this round", fontsize=15, weight="bold", va="top")
+        fig.text(0.06, 0.965, "图注与口径核对清单", fontsize=15, weight="bold", va="top")
         y = 0.925
         for k, v in CHECKLIST:
             fig.text(0.06, y, "√ " + k, fontsize=10.5, weight="bold", va="top")
@@ -179,10 +183,10 @@ def build_pdf():
         pdf.savefig(fig); plt.close(fig)
 
         fig = plt.figure(figsize=(8.27, 11.69))
-        fig.text(0.06, 0.965, "New captions for Figures 2-7 (ready to replace the main text)", fontsize=15, weight="bold", va="top")
+        fig.text(0.06, 0.965, "图 1–7 图注原文（取自主稿）", fontsize=15, weight="bold", va="top")
         yy = 0.91
-        for title, cap in CAPS[1:]:
-            txt = wrap_cjk(disp(cap), 62)
+        for title, _body, full in CAPS:
+            txt = wrap_cjk(disp(full), 62)
             fig.text(0.06, yy, txt, fontsize=9.5, va="top", linespacing=1.75)
             yy -= 0.042 * (txt.count("\n") + 2)
         pdf.savefig(fig); plt.close(fig)

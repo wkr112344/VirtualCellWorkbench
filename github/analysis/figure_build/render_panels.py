@@ -12,6 +12,7 @@ from scipy.stats import gaussian_kde
 from scipy.cluster.hierarchy import linkage, leaves_list
 from matplotlib.path import Path as MPath
 import matplotlib
+import matplotlib.patheffects as pe
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -30,9 +31,62 @@ plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 8, "axes.titlesi
 BLUE, ORANGE, GRAY, GREEN = "#216A94", "#C65C27", "#687681", "#337F66"
 LIGHT, DARK = "#9FC3D8", "#172A38"
 
+# Every label drawn inside a panel is black with a white outline. On a white page
+# the outline is invisible, but it keeps text readable where a ridge, a median
+# rule, a colour bar or an axis line passes underneath, and stops hairline
+# numerals from being swallowed by an edge.
+import matplotlib.patheffects as _pe
+OUTLINE = [_pe.withStroke(linewidth=2.2, foreground="white")]
+
+
+def ink(size=7.5, bold=False, italic=False, color="black"):
+    """Black text with a white outline, for labels that may overlap artwork."""
+    return dict(color=color, fontsize=size, weight="bold" if bold else "normal",
+                style="italic" if italic else "normal", path_effects=OUTLINE)
+
 
 def panel(ax, l, title, fs_title=10, pad=10):
-    ax.set_title(l + "  " + title, loc="left", fontweight="bold", pad=pad, fontsize=fs_title)
+    ax.set_title(l + "  " + title, loc="left", fontweight="bold", pad=pad,
+                 fontsize=fs_title, color="black", path_effects=OUTLINE)
+
+# --- Fig 2C shared: exemplar selection, delta colour mapping, colour bar ---------
+# Truncated Blues, so the light end stays clearly visible against a white background.
+F2C_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
+    "f2c_blue", plt.get_cmap("Blues")(np.linspace(0.40, 1.0, 256)))
+
+
+def f2c_selection():
+    """Six exemplar drugs: 3 with the largest per-drug delta, 3 closest to the median.
+
+    Restricted to drugs with >= 20 cell lines (36 of the 2,037), so both the
+    exemplar choice and the median the bottom row sits on are defined on that
+    subset. Returns the subset medians so the panel can be labelled honestly.
+    """
+    ncells = d.groupby("drug").size().rename("n_cells")
+    pdc = perdrug.set_index("drug_id").join(ncells).reset_index()
+    pdc = pdc[pdc.n_cells >= 20]              # enough cell lines for a readable scatter
+    strong = pdc.nlargest(3, "delta").reset_index(drop=True)
+    stable = pdc.iloc[(pdc.delta - np.median(pdc.delta)).abs().argsort()[:3]].reset_index(drop=True)
+    sel = ([(strong.iloc[k], "high") for k in range(3)] +
+           [(stable.iloc[k], "mid") for k in range(3)])
+    return sel, float(np.median(pdc.delta)), len(pdc), float(np.median(perdrug.delta))
+
+
+def f2c_norm(sel):
+    dv = np.array([float(r.delta) for r, _ in sel])
+    pad = 0.08 * (dv.max() - dv.min())
+    return plt.Normalize(vmin=float(dv.min() - pad), vmax=float(dv.max() + pad))
+
+
+def f2c_colorbar(fig, norm, rect, fs_label, fs_tick):
+    sm = plt.cm.ScalarMappable(norm=norm, cmap=F2C_CMAP)
+    sm.set_array([])
+    cb = fig.colorbar(sm, cax=fig.add_axes(rect), orientation="horizontal")
+    cb.set_label("per-drug Δ  (beta2020 − dcic2021)", fontsize=fs_label)
+    cb.ax.tick_params(labelsize=fs_tick)
+    cb.outline.set_linewidth(0.5)
+    return cb
+
 
 
 def kde_ridge(ax, data, y0, height, color, xr=None, alpha=0.55):
@@ -118,7 +172,8 @@ def f2b(ax):
         med = float(np.median(data)); pf = float((data > 0).mean())
         ax.plot([med], [y0 + 0.1], "o", color=c, ms=4)
         ax.annotate("median %.3f | %.0f%% > 0" % (med, pf * 100), xy=(xr[0] + 0.02, y0 + 0.62),
-                    fontsize=7, color=c)
+                    fontsize=7, color="k",
+                    path_effects=[pe.withStroke(linewidth=2.6, foreground="white")])
     ax.axvline(0, color=GRAY, lw=1, ls="--")
     ax.set(xlabel="Per-drug difference (beta2020 − dcic2021)", xlim=xr, ylim=(-0.3, 3.6))
     ax.set_yticks([3.30, 2.15, 1.00])
@@ -127,37 +182,48 @@ def f2b(ax):
 
 
 def f2c(fig):
-    inner = GridSpec(2, 3, figure=fig, wspace=0.28, hspace=0.42, left=0.14, right=0.98,
-                     top=0.86, bottom=0.15)
-    ncells = d.groupby("drug").size().rename("n_cells")
-    pdc = perdrug.set_index("drug_id").join(ncells).reset_index()
-    pdc = pdc[pdc.n_cells >= 20]
-    strong = pdc.nlargest(3, "delta").reset_index(drop=True)
-    stable = pdc.iloc[(pdc.delta - np.median(pdc.delta)).abs().argsort()[:3]].reset_index(drop=True)
-    first = None
+    inner = GridSpec(2, 3, figure=fig, wspace=0.30, hspace=0.46, left=0.155, right=0.985,
+                     top=0.775, bottom=0.225)
+    sel_c, _med, _nq, _med_all = f2c_selection()
+    norm_c = f2c_norm(sel_c)
+    _c_axes = []
     for k in range(3):
-        for row, (r, tag, c) in enumerate([(strong.iloc[k], "sensitive", BLUE),
-                                           (stable.iloc[k], "stable", GRAY)]):
+        for row in (0, 1):
+            r, tag = sel_c[row * 3 + k]
             axk = fig.add_subplot(inner[row, k])
-            first = first or axk
+            _c_axes.append((axk, row))
             sub = d[d.drug == r.drug_id]
             axk.plot([0, 1], [0, 1], "--", color=GRAY, lw=0.8)
-            axk.scatter(sub.pearson_B_dcic2021, sub.pearson_A_beta2020, s=9, color=c, alpha=0.7)
+            axk.scatter(sub.pearson_B_dcic2021, sub.pearson_A_beta2020, s=9,
+                        color=F2C_CMAP(norm_c(float(r.delta))), alpha=0.8)
             axk.set(xticks=[0, 1], yticks=[0, 1], xlim=(-0.03, 1.03), ylim=(-0.03, 1.03))
             if row == 0:
                 axk.set_xticklabels([])
             if k > 0:
                 axk.set_yticklabels([])
-            if row == 0 and k == 0:
-                axk.set_ylabel("beta2020", fontsize=7.5)
+            if k == 0:                               # y axis, never overwritten below
+                axk.set_ylabel("beta2020", fontsize=7.5, labelpad=1)
             if row == 1:
                 axk.set_xlabel("dcic2021", fontsize=7.5)
-            axk.set_title(r.drug_id, fontsize=6.6, pad=3, color="#25333D")
-            if k == 0:
-                axk.set_ylabel(("sensitive" if row == 0 else "stable") + chr(10) + "(beta scores)",
-                               fontsize=6.6, labelpad=1)
-    fig.text(0.02, 0.96, "C  Exemplar drugs: per-cell-line scores", fontsize=10,
+            axk.set_title(r.drug_id, fontsize=6.4, pad=3, loc="left", color="#25333D")
+            axk.text(0.04, 0.94, "Δ=%+.4f" % float(r.delta), transform=axk.transAxes,
+                     ha="left", va="top", fontsize=6.4, color=DARK)
+    # The selection rule is stated on the figure, not as "high Δ" / "Δ ≈ median"
+    # row tags: those two words were an unsourced editorial label, and the subset
+    # restriction (>= 20 cell lines) changes which median the bottom row sits on.
+    _c_pos = [(a.get_position(), row) for a, row in _c_axes]
+    f2c_colorbar(fig, norm_c, [0.355, 0.085, 0.40, 0.022], 6.8, 6.2)
+    fig.text(0.02, 0.965, "C  Exemplar drugs: per-cell-line scores", fontsize=10,
              fontweight="bold", ha="left", va="top")
+    fig.text(0.02, 0.895, "x: cross-gene Pearson, dcic2021     y: cross-gene Pearson, beta2020"
+                           "     colour: per-drug Δ",
+             fontsize=7.2, color=DARK, ha="left", va="top")
+    _cbb = _c_axes[-1][0].get_position()
+    fig.text(_cbb.x0, _cbb.y0 - 0.045,
+             "C: top row = 3 largest Δ; bottom row = 3 closest to the median\n"
+             "of the %d drugs with ≥20 cell lines (median Δ = %.4f;\n"
+             "over all 2,037 drugs it would be %.4f)." % (_nq, _med, _med_all),
+             ha="left", va="top", fontsize=6.6, color=GRAY, linespacing=1.5)
 
 
 def f2d(ax):
@@ -193,9 +259,15 @@ def f3a(ax):
         vp = ax.violinplot(v, positions=[k], showextrema=False, widths=0.7)
         for body in vp["bodies"]:
             body.set_facecolor(c); body.set_alpha(0.35)
-        ax.plot([k - 0.10, k + 0.10], [np.median(v)] * 2, color=DARK, lw=1.6)
-        ax.annotate("%.3f" % np.median(v), xy=(k, np.median(v)), xytext=(0, 6),
-                    textcoords="offset points", ha="center", fontsize=7.5)
+        med, mean = float(np.median(v)), float(v.mean())
+        ax.plot([k - 0.10, k + 0.10], [med] * 2, color=DARK, lw=1.6)          # median, solid
+        ax.plot([k - 0.13, k + 0.13], [mean] * 2, color="k", lw=1.1, ls="--")  # mean, dashed
+        ax.annotate("%.3f" % mean, xy=(k, mean), xytext=(0, 5),
+                    textcoords="offset points", ha="center", fontsize=7.5, color="k",
+                    path_effects=[pe.withStroke(linewidth=2.2, foreground="white")])
+        ax.annotate("%.3f" % med, xy=(k, med), xytext=(0, -11),
+                    textcoords="offset points", ha="center", fontsize=7.5, color=DARK,
+                    path_effects=[pe.withStroke(linewidth=2.2, foreground="white")])
     ax.set(xticks=range(4), xticklabels=[s[0] for s in
            [("beta-tr." + chr(10) + "× beta",), ("beta-tr." + chr(10) + "× dcic",),
             ("dcic-tr." + chr(10) + "× beta",), ("dcic-tr." + chr(10) + "× dcic",)]],
@@ -322,7 +394,7 @@ def f4b(ax):
 
 
 def _membership():
-    sl = pd.read_csv(r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/figure_source_data/TableS_disease_top10_shortlist.csv")
+    sl = pd.read_csv(r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/图源数据/TableS_disease_top10_shortlist.csv")
     g10 = perdrug[perdrug.in_top10_beta][["drug_id", "rank_beta"]].rename(columns={"rank_beta": "Global"})
     SIGS = [("ACEVEDO_LIVER_TUMOR_VS_NORMAL_ADJACENT_TISSUE", "Liver"),
             ("RODRIGUES_THYROID_CARCINOMA_ANAPLASTIC", "Thyroid"),
@@ -427,8 +499,10 @@ def f5a(fig):
             axk.set_yticks(range(len(cc))); axk.set_yticklabels(list(cc.cell), fontsize=6)
         else:
             axk.set_yticks([])
-        axk.set_xticks([0], [xlab], fontsize=7.5, rotation=25 if k == 3 else 0,
-                       ha="right" if k == 3 else "center")
+        # All four block labels sat level. "responses" was rotated 25 degrees,
+        # which read as a rendering fault rather than a deliberate stagger, and
+        # nothing in the panel needs the extra width.
+        axk.set_xticks([0], [xlab], fontsize=7.5, rotation=0, ha="center")
         axk.set_xticks(np.arange(-.5, 1, 1), minor=True)
         axk.grid(which="minor", color="white", lw=0.8)
         axk.tick_params(which="minor", length=0)
@@ -458,7 +532,7 @@ def f5b(ax):
     ax.set(xlabel="Mean Pearson difference (β − dcic)", xlim=(0, 0.62),
            ylabel="Cell lines (sorted by Δ)")
     ax.text(.97, .52, "mean %.3f" % cc.delta.mean() + chr(10) + "dot size ∝ responses",
-            transform=ax.transAxes, ha="right", va="center", fontsize=7.5, color=ORANGE)
+            transform=ax.transAxes, ha="right", va="center", **ink(7.5))
     panel(ax, "B", "Ordered cell-line effect")
 
 
@@ -489,17 +563,23 @@ def f5c(fig):
 def f5d(fig):
     cc = _cc()
     ccx = cc[cc.n >= 20].reset_index(drop=True)
+    # Four exemplar cell lines, taken as the two largest and two smallest mean
+    # cross-reference differences among cell lines with >= 20 scored drugs. They
+    # are illustrative, not extremes to be read as: earlier rounds labelled them
+    # "most sensitive" through "most stable", then "largest Δ" through
+    # "smallest Δ". Both are superlative claims about a spread the panel does not
+    # test, so the rows now carry a neutral "example" tag and nothing else.
     sens = ccx.iloc[:2]["cell"].tolist(); stab = ccx.iloc[-2:]["cell"].tolist()
     rows = [("per-drug (2,037 drugs)", d.groupby("drug").pearson_delta.mean().dropna().to_numpy(),
              BLUE, "D"),
             ("per-cell (63 cell lines)", cc.delta.to_numpy(), ORANGE, None),
-            (sens[0] + "  (most sensitive)", d[d.cell == sens[0]].pearson_delta.dropna().to_numpy(),
+            (sens[0] + "  (example)", d[d.cell == sens[0]].pearson_delta.dropna().to_numpy(),
              "#5C8DB8", None),
-            (sens[1] + "  (sensitive)", d[d.cell == sens[1]].pearson_delta.dropna().to_numpy(),
+            (sens[1] + "  (example)", d[d.cell == sens[1]].pearson_delta.dropna().to_numpy(),
              "#5C8DB8", None),
-            (stab[0] + "  (less sensitive)", d[d.cell == stab[0]].pearson_delta.dropna().to_numpy(),
+            (stab[0] + "  (example)", d[d.cell == stab[0]].pearson_delta.dropna().to_numpy(),
              ORANGE, None),
-            (stab[1] + "  (most stable)", d[d.cell == stab[1]].pearson_delta.dropna().to_numpy(),
+            (stab[1] + "  (example)", d[d.cell == stab[1]].pearson_delta.dropna().to_numpy(),
              "#E2A176", None)]
     inner = GridSpec(6, 1, figure=fig, hspace=0.55, left=0.10, right=0.97, top=0.91, bottom=0.09)
     for k, (lab, v, c, letter) in enumerate(rows):
@@ -507,8 +587,7 @@ def f5d(fig):
         v = v[np.isfinite(v)]
         kde_ridge(axe, v, 0.0, 0.8, c, xr=(-0.6, 1.0))
         axe.axvline(0, color=GRAY, lw=0.8, ls="--")
-        axe.annotate(lab + "   median %.3f" % np.median(v), xy=(-0.57, 0.55),
-                     fontsize=7.5, color=c)
+        axe.annotate(lab + "   median %.3f" % np.median(v), xy=(-0.57, 0.55), **ink(7.5))
         axe.set_yticks([]); axe.set_xlim(-0.6, 1.0); axe.set_ylim(-0.15, 1.0)
         if k < 5:
             axe.set_xticklabels([])
@@ -544,10 +623,16 @@ def f6b(ax):
         jit = np.random.default_rng(7).uniform(-0.08, 0.08, len(dv))
         ax.scatter(k + jit, dv, s=22, color=BLUE, alpha=0.75)
     ax.axhline(0, color=GRAY, lw=1)
-    ax.annotate("difference ≈ 0:" + chr(10) + "the gene-mean baseline" + chr(10) +
-                "already explains raw scores", xy=(1.5, 0.25), ha="center", fontsize=8, color=GRAY)
+    # Wording is the author's. Two earlier versions were rejected: "the gene-mean
+    # baseline already explains raw scores" asserts a mechanism the panel cannot
+    # support, and "model < baseline in all four states" inflates a gap that is
+    # 0.0008 in Pearson units -- 0.09% of the ~0.93 scores, i.e. similar. The
+    # caption carries the numbers; the panel states the qualitative reading.
+    ax.annotate("The model and gene-mean baseline" + chr(10) +
+                "obtain similar raw Pearson scores.",
+                xy=(1.5, 0.34), ha="center", va="top", linespacing=1.5, **ink(7.5))
     ax.set(xticks=range(4), xticklabels=[s[2] for s in STATES],
-           ylabel="Model − baseline (×1e-3 Pearson)", ylim=(-1.4, 1.0))
+           ylabel="Model − baseline (×1e-3 Pearson)", ylim=(-1.4, 0.46))
     panel(ax, "B", "Paired difference view")
 
 
@@ -701,8 +786,11 @@ def f7d(ax):
     ax.set(xticks=[0, 1], xticklabels=["RNASeQC", "RSEM"], yticks=[0, 1],
            yticklabels=["RNASeQC", "RSEM"], xlabel="Evaluation product",
            ylabel="Tissue-mean source")
-    ax.annotate("interaction = %.5f" % intr, xy=(0.5, -0.30), xycoords="axes fraction",
-                ha="center", va="top", fontsize=9, color=DARK, annotation_clip=False)
+    # The "interaction = 0.07283" line under the heat map was removed. That same
+    # quantity is the subject of panel E, which shows its distribution across
+    # donors; stating it here as a bare number gave the panel two jobs at once.
+    # The four cell scores above are the reference and stay. intr is still
+    # computed because it is what panel E's own numbers come from.
     panel(ax, "D", "2×2 summary")
 
 
@@ -728,6 +816,12 @@ def f7e(ax):
 
 def organ_system(t):
     tl = t.lower()
+    # Kidney/bladder FIRST: "Kidney Cortex" contains "cortex", so the brain test
+    # below used to claim it and the tissue landed in Brain & CNS, sorting among
+    # neural tissues by a Pearson interaction that has nothing to do with the
+    # brain. Specific organ terms must be tested before generic cortex.
+    if any(k in tl for k in ("kidney", "bladder")):
+        return "Kidney & urinary"
     if any(k in tl for k in ("brain", "cortex", "cerebellum", "hippocampus", "hypothalamus",
                              "amygdala", "basal ganglia", "substantia", "caudate", "putamen",
                              "accumbens", "spinal cord")):
@@ -743,8 +837,6 @@ def organ_system(t):
     if any(k in tl for k in ("colon", "small intestine", "stomach", "liver", "pancreas",
                              "esophag", "gallbladder", "rectum", "salivary")):
         return "Digestive & liver"
-    if any(k in tl for k in ("kidney", "bladder")):
-        return "Kidney & urinary"
     if any(k in tl for k in ("uterus", "vagina", "ovary", "fallopian", "cervix", "breast",
                              "testis", "prostate", "epididym", "seminal")):
         return "Reproductive & breast"
@@ -764,13 +856,26 @@ SYS_COLOR = {"Brain & CNS": "#6B5B95", "Blood & immune": "#C65C27", "Heart": "#A
              "Vascular & nerve": "#5C7A99", "Other": "#999999"}
 
 
-def f7f(fig):
-    E = S12.copy(); E["sys"] = E.tissue.map(organ_system)
-    E = E.sort_values(["sys", "interaction_pearson"], ascending=[True, False]).reset_index(drop=True)
+def f7f(fig, which="rep", letter="F", fs_tick=6.5, fs_ylab=7.0, title=None,
+        top=0.90, bottom=0.265, legend=True):
+    E_all = S12.copy(); E_all["sys"] = E_all.tissue.map(organ_system)
+    E_all = E_all.sort_values(["sys", "interaction_pearson"],
+                              ascending=[True, False]).reset_index(drop=True)
+    # main text: one representative tissue per organ system (highest Pearson interaction
+    # within that system); the full 68-tissue version is Supplementary Figure S2
+    if which == "all":
+        E = E_all
+    else:
+        E = E_all.groupby("sys", sort=False).head(1).reset_index(drop=True)
     cols = ["interaction_pearson", "interaction_spearman", "n_donors", "adv_R", "adv_E"]
-    titles = ["Pearson int.", "Spearman int.", "n donors", "adv (R)", "adv (E)"]
-    inner = GridSpec(1, len(cols) + 1, figure=fig, width_ratios=[0.3] + [1] * len(cols),
-                     wspace=0.05, left=0.30, right=0.96, top=0.90, bottom=0.10)
+    # R = reference built from the RNASeQC quantification, E = from RSEM
+    titles = ["Pearson\ninteraction", "Spearman\ninteraction", "n donors",
+              "adv.\nRNASeQC (R)", "adv.\nRSEM (E)"]
+    cb_labels = ["interaction", "interaction", "donors", "advantage", "advantage"]
+    inner = GridSpec(2, len(cols) + 1, figure=fig, width_ratios=[0.3] + [1] * len(cols),
+                     height_ratios=[1, 0.05], wspace=0.30, hspace=0.22, left=0.30,
+                     right=0.965, top=top, bottom=bottom)
+    # the organ-system strip must span exactly the heat-map row, not the colour-bar row too
     side = fig.add_subplot(inner[0, 0])
     side.imshow(np.arange(len(E))[:, None], aspect="auto",
                 cmap=matplotlib.colors.ListedColormap([SYS_COLOR[s] for s in E.sys]))
@@ -780,24 +885,55 @@ def f7f(fig):
     for k, col in enumerate(cols):
         axk = fig.add_subplot(inner[0, k + 1])
         vv = E[col].to_numpy()
+        raw = vv.copy()
         if col == "n_donors":
             vv_norm = np.log10(vv)
         else:
             vv_norm = (vv - vv.min()) / max(vv.max() - vv.min(), 1e-12)
         cmap = "Greens" if col == "n_donors" else ("Blues" if "pearson" in col else
                                                    ("Oranges" if "spearman" in col else "Purples"))
-        axk.imshow(vv_norm[:, None], cmap=cmap, aspect="auto")
-        axk.set_xticks([0], [titles[k]], fontsize=6.5, rotation=25, ha="right")
+        imk = axk.imshow(vv_norm[:, None], cmap=cmap, aspect="auto")
+        axk.set_xticks([0], [titles[k]], fontsize=fs_tick, rotation=25, ha="right")
         axk.set_yticks([])
         axk.set_xticks(np.arange(-.5, 1, 1), minor=True)
         axk.grid(which="minor", color="white", lw=1)
         axk.tick_params(which="minor", length=0)
         for sp in axk.spines.values():
             sp.set_visible(False)
+        # per-column colour bar: without it the reader cannot tell what the shade means
+        cax = fig.add_subplot(inner[1, k + 1])
+        cb = fig.colorbar(imk, cax=cax, orientation="horizontal")
+        lo, hi = float(raw.min()), float(raw.max())
+        if col == "n_donors":
+            # imshow holds log10(values), so the colour bar is already in log space
+            tk = np.unique(np.round(np.geomspace(max(lo, 1.0), hi, 3)).astype(int))
+            cb.set_ticks(np.log10(tk))
+            cb.set_ticklabels([str(int(t)) for t in tk])
+        else:
+            # imshow holds min-max normalised values -> the bar spans 0..1, so ticks go
+            # in normalised space and carry the raw values as labels
+            nd = 3 if hi < 0.2 else 4
+            cb.set_ticks([0.0, 1.0])
+            cb.set_ticklabels([("%." + str(nd) + "f") % lo, ("%." + str(nd) + "f") % hi])
+        cb.ax.tick_params(labelsize=fs_tick - 1.4, length=1.6, pad=1.2, labelrotation=90)
+        cb.set_label(cb_labels[k], fontsize=fs_tick - 0.4, labelpad=2.6)
+        cb.outline.set_linewidth(0.4)
     side.set_yticks(range(len(E)))
-    side.set_yticklabels(E.tissue.str.slice(0, 30), fontsize=5.4)
+    side.set_yticklabels(E.tissue, fontsize=fs_ylab)
     side.yaxis.tick_left()
-    panel(side, "F", "68 tissues × 5 summaries")
+    panel(side, letter, title or ("%d representative tissues" % len(E)))
+    # organ-system legend under the heat map: the colour strip on the left is otherwise
+    # unexplained. The heat map itself is untouched; the canvas is simply taller.
+    if legend:
+        for i, _sy in enumerate(dict.fromkeys(E.sys)):
+            rr, cc = divmod(i, 3)
+            _lx = 0.30 + cc * 0.222
+            _ly = bottom - 0.098 - rr * 0.0455
+            fig.patches.append(mpatches.Rectangle(
+                (_lx, _ly), 0.0062, 0.0165, transform=fig.transFigure,
+                facecolor=SYS_COLOR[_sy], edgecolor="none", zorder=5))
+            fig.text(_lx + 0.0098, _ly + 0.0082, _sy, fontsize=fs_ylab - 0.4,
+                     va="center", ha="left", color=DARK, zorder=5)
 
 
 # ==================================================================== export
@@ -854,7 +990,12 @@ JOBS = [
     ("Figure7_C_donor_raincloud", f7c, 130, 95, False),
     ("Figure7_D_2x2_summary", f7d, 115, 100, False),
     ("Figure7_E_bootstrap", f7e, 130, 100, False),
-    ("Figure7_F_tissue_matrix", f7f, 160, 170, True),
+    ("Figure7_F_tissue_matrix", f7f, 165, 258, True),
+    # full 68-tissue version, moved out of the main text into Supplementary Figure S2
+    ("Supplementary_Figure_S2_GTEx_tissue_matrix",
+     lambda fig: f7f(fig, which="all", letter="S2", fs_tick=6.5, fs_ylab=5.8,
+                     title="All 68 tissues, grouped by organ system", top=0.90, bottom=0.245),
+     155, 258, True),
 ]
 
 if __name__ == "__main__":

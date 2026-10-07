@@ -20,9 +20,10 @@ from pathlib import Path
 import json
 import numpy as np
 import pandas as pd
-from scipy.stats import gaussian_kde
+from scipy.stats import gaussian_kde, spearmanr
 from scipy.cluster.hierarchy import linkage, leaves_list
 import matplotlib
+import matplotlib.patheffects as pe
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -67,6 +68,44 @@ def kde_ridge(ax, data, y0, height, color, xr=None, alpha=0.55):
     ax.fill_between(xs, y0, y0 + dens, color=color, alpha=alpha, lw=0.8)
     ax.plot(xs, y0 + dens, color=color, lw=1)
 
+# --- Fig 2C shared: exemplar selection, delta colour mapping, colour bar ---------
+# Truncated Blues, so the light end stays clearly visible against a white background.
+F2C_CMAP = matplotlib.colors.LinearSegmentedColormap.from_list(
+    "f2c_blue", plt.get_cmap("Blues")(np.linspace(0.40, 1.0, 256)))
+
+
+def f2c_selection():
+    """Six exemplar drugs: 3 with the largest per-drug delta, 3 closest to the median.
+
+    Restricted to drugs with >= 20 cell lines (36 of the 2,037), so both the
+    exemplar choice and the median the bottom row sits on are defined on that
+    subset. The caller needs the subset to label the panel honestly.
+    """
+    ncells = d.groupby("drug").size().rename("n_cells")
+    pdc = perdrug.set_index("drug_id").join(ncells).reset_index()
+    pdc = pdc[pdc.n_cells >= 20]              # enough cell lines for a readable scatter
+    strong = pdc.nlargest(3, "delta").reset_index(drop=True)
+    stable = pdc.iloc[(pdc.delta - np.median(pdc.delta)).abs().argsort()[:3]].reset_index(drop=True)
+    return ([(strong.iloc[k], "high") for k in range(3)] +
+            [(stable.iloc[k], "mid") for k in range(3)], pdc)
+
+
+def f2c_norm(sel):
+    dv = np.array([float(r.delta) for r, _ in sel])
+    pad = 0.08 * (dv.max() - dv.min())
+    return plt.Normalize(vmin=float(dv.min() - pad), vmax=float(dv.max() + pad))
+
+
+def f2c_colorbar(fig, norm, rect, fs_label, fs_tick):
+    sm = plt.cm.ScalarMappable(norm=norm, cmap=F2C_CMAP)
+    sm.set_array([])
+    cb = fig.colorbar(sm, cax=fig.add_axes(rect), orientation="horizontal")
+    cb.set_label("per-drug Δ  (beta2020 − dcic2021)", fontsize=fs_label)
+    cb.ax.tick_params(labelsize=fs_tick)
+    cb.outline.set_linewidth(0.5)
+    return cb
+
+
 
 # ------------------------------------------------------------------ data
 d = pd.read_csv(S / "frozen_prediction_matrices/frozen_perrow_three_metrics.csv")
@@ -75,6 +114,7 @@ for m in ("pearson", "spearman", "cosine"):
 met = pd.read_csv(O / "S1_weighting_and_metrics.csv")
 perdrug = pd.read_csv(S / "C_perdrug_stability.csv")
 topk = pd.read_csv(O / "S3_topk_performance_ranking.csv")
+S17 = pd.read_csv(O / "S17_within_reference_rank_stability.csv")
 ext = pd.read_csv(S / "B_sevenmodel.csv")
 J = pd.read_csv(S / "J_disease_panels.csv")
 gtex = pd.read_csv(S / "gtex_reference_sensitivity/per_sample_scores.csv")
@@ -109,7 +149,7 @@ CTX = {"rank_perf": "Global",
 # ============================================================================ Figure 2
 fig = plt.figure(figsize=(W, 9.2))
 gs = GridSpec(3, 2, figure=fig, height_ratios=[1.35, 1.25, 0.55],
-              hspace=0.55, wspace=0.38, left=0.135, right=0.985, top=0.935, bottom=0.06)
+              hspace=0.55, wspace=0.38, left=0.135, right=0.985, top=0.935, bottom=0.015)
 
 # A density scatter + marginals
 ax = fig.add_subplot(gs[0, 0])
@@ -119,17 +159,33 @@ ax_top = divider.append_axes("top", size="18%", pad=0.02, sharex=ax)
 ax_right = divider.append_axes("right", size="18%", pad=0.02, sharey=ax)
 hb = ax_main.hexbin(perdrug.pcc_dcic, perdrug.pcc_beta, gridsize=38, cmap="Blues",
                     mincnt=1, linewidths=0.1)
-ax_main.plot([0, 1], [0, 1], "--", color=GRAY, lw=1)
-ax_main.plot(perdrug.pcc_dcic, perdrug.pcc_beta, "o", ms=1.6, color="#0B3A5C", alpha=0.25)
 n_pos = int((perdrug.delta > 0).sum())
 ax_main.text(0.04, 0.955, f"{n_pos} / {len(perdrug)} drugs shift\nin the same direction",
-             transform=ax_main.transAxes, va="top", fontsize=7.5, color=DARK)
+             transform=ax_main.transAxes, va="top", fontsize=7.5, color=DARK,
+             path_effects=[pe.withStroke(linewidth=2.4, foreground="white")])
+
+# Axes run from -0.25, not 0. 22.4% of drugs score NEGATIVELY under dcic2021
+# (2526 of 2,037 rows; 87.8% of the per-drug means are negative on that side),
+# so a 0-based axis silently truncated a fifth of the data and made the cloud
+# look far more concentrated than it is. The diagonal is drawn across the full
+# range, so the reference it provides is unchanged.
+_AX0 = -0.25
+ax_main.plot([_AX0, 1], [_AX0, 1], "--", color=GRAY, lw=1)
+ax_main.plot(perdrug.pcc_dcic, perdrug.pcc_beta, "o", ms=1.6, color="#0B3A5C", alpha=0.25)
+ax_main.axhline(0, color="#9AA7B0", lw=0.7, zorder=1)
+ax_main.axvline(0, color="#9AA7B0", lw=0.7, zorder=1)
 ax_main.set(xlabel="Cross-gene Pearson, dcic2021", ylabel="Cross-gene Pearson, beta2020",
-            xlim=(0, 1), ylim=(0, 1))
-panel(ax_top, "A", "Reference-vs-reference density", pad=14)
-ax_top.hist(perdrug.pcc_dcic, bins=40, color=BLUE, alpha=0.6)
+            xlim=(_AX0, 1), ylim=(_AX0, 1))
+ax_main.set_xticks([-0.25, 0, 0.25, 0.5, 0.75, 1.0])
+ax_main.set_yticks([-0.25, 0, 0.25, 0.5, 0.75, 1.0])
+# fs_title 8 rather than 9: at this panel width the full wording collided with
+# panel B's heading. The wording itself is the author's; only the size is cut.
+panel(ax_top, "A", "Fixed predictions scored against two matrices", pad=14, fs_title=8)
+_EDG = np.linspace(_AX0, 1, 41)
+ax_top.hist(perdrug.pcc_dcic.dropna(), bins=_EDG, color=BLUE, alpha=0.6)
 ax_top.axis("off")
-ax_right.hist(perdrug.pcc_beta, bins=40, orientation="horizontal", color=BLUE, alpha=0.6)
+ax_right.hist(perdrug.pcc_beta.dropna(), bins=_EDG, orientation="horizontal",
+              color=BLUE, alpha=0.6)
 ax_right.axis("off")
 
 # B three aligned metric ridges
@@ -145,8 +201,9 @@ for k, (lab, col, c) in enumerate(labels3):
     m = float(np.median(data))
     pf = float((data > 0).mean())
     ax.plot([m], [y0 + 0.1], "o", color=c, ms=4)
-    ax.annotate(f"median {m:.3f} | {pf * 100:.0f}% > 0", xy=(xr[0] + 0.02, y0 + 0.62),
-                fontsize=6.8, color=c)
+    ax.annotate(f"median {m:.3f} | {pf * 100:.1f}% > 0", xy=(xr[0] + 0.02, y0 + 0.62),
+                fontsize=6.8, color="k",
+                path_effects=[pe.withStroke(linewidth=2.6, foreground="white")])
     rec(2, "B", lab, m, positive_fraction=pf)
 ax.axvline(0, color=GRAY, lw=1, ls="--")
 ax.set_yticks([])
@@ -157,35 +214,53 @@ panel(ax, "B", "Three metrics", pad=14)
 
 # C exemplar small multiples (2 x 3)
 inner = gs[1, 0].subgridspec(2, 3, wspace=0.25, hspace=0.55)
-ncells = d.groupby("drug").size().rename("n_cells")
-pdc = perdrug.set_index("drug_id").join(ncells).reset_index()
-pdc = pdc[pdc.n_cells >= 20]                    # enough cell lines for a readable scatter
-strong = pdc.nlargest(3, "delta").reset_index(drop=True)
-stable = pdc.iloc[(pdc.delta - np.median(pdc.delta)).abs().argsort()[:3]].reset_index(drop=True)
+sel_c, q_c = f2c_selection()
+norm_c = f2c_norm(sel_c)
+_c_axes = []
 for k in range(3):
-    for row, (r, tag, c) in enumerate([(strong.iloc[k], "reference-sensitive", BLUE),
-                                       (stable.iloc[k], "relatively stable", GRAY)]):
+    for row in (0, 1):
+        r, tag = sel_c[row * 3 + k]
         axk = fig.add_subplot(inner[row, k])
+        _c_axes.append((axk, row))
         sub = d[d.drug == r.drug_id]
-        axk.plot([0, 1], [0, 1], "--", color=GRAY, lw=0.8)
-        axk.scatter(sub.pearson_B_dcic2021, sub.pearson_A_beta2020, s=8, color=c, alpha=0.7)
-        axk.set(xticks=[0, 1], yticks=[0, 1], xlim=(0, 1), ylim=(0, 1))
+        # -0.20, matching panel A. Four of the six exemplars put cells below zero
+        # on the dcic2021 side (down to -0.175), so a 0-based box would clip them.
+        axk.plot([-0.20, 1], [-0.20, 1], "--", color=GRAY, lw=0.8)
+        axk.scatter(sub.pearson_B_dcic2021, sub.pearson_A_beta2020, s=8,
+                    color=F2C_CMAP(norm_c(float(r.delta))), alpha=0.8)
+        axk.set(xticks=[0, 0.5, 1], yticks=[0, 0.5, 1],
+                xlim=(-0.20, 1), ylim=(-0.20, 1))
         if k > 0:
             axk.set_yticklabels([])
         axk.tick_params(labelsize=6)
         if row == 0:
             axk.set_xticklabels([])
-        if row == 0 and k == 0:
-            axk.set_ylabel("beta2020", fontsize=6.5)
+        if k == 0:                                   # y axis, never overwritten below
+            axk.set_ylabel("beta2020", fontsize=6.5, labelpad=1)
         if row == 1:
             axk.set_xlabel("dcic2021", fontsize=6.5)
-        if k == 0:
-            axk.set_ylabel("sensitive\n(Δ large)" if row == 0 else "stable\n(Δ ≈ median)",
-                           fontsize=6, labelpad=1)
-        axk.set_title(r.drug_id, fontsize=5.6, pad=3, color="#25333D")
-_axc0 = fig.axes[-6].get_position()
-fig.text(_axc0.x0, _axc0.y1 + 0.052, "C  Exemplar drugs: per-cell-line scores",
+        axk.set_title(r.drug_id, fontsize=5.6, pad=3, loc="left", color="#25333D")
+        axk.text(0.04, 0.94, "Δ=%+.4f" % float(r.delta), transform=axk.transAxes,
+                 ha="left", va="top", fontsize=5.8, color=DARK)
+# The selection rule for these six drugs is stated in the caption, not on the
+# figure: the "high Δ" / "Δ ≈ median" row tags were an unsourced editorial label,
+# and with the drug id + delta already printed in each panel they add nothing.
+_c_pos = [(a.get_position(), row) for a, row in _c_axes]
+_cx0 = min(bb.x0 for bb, _ in _c_pos)
+_cx1 = max(bb.x1 for bb, _ in _c_pos)
+_cy0 = min(bb.y0 for bb, _ in _c_pos)
+f2c_colorbar(fig, norm_c, [_cx0 + 0.05, _cy0 - 0.080, (_cx1 - _cx0) * 0.42, 0.011], 5.8, 5.2)
+_axc0 = _c_axes[0][0].get_position()
+fig.text(_axc0.x0, _axc0.y1 + 0.050, "C  Exemplar drugs: per-cell-line scores",
          fontsize=9, fontweight="bold", ha="left", va="bottom")
+fig.text(_axc0.x0, _axc0.y1 + 0.028,
+         "x: cross-gene Pearson, dcic2021     y: cross-gene Pearson, beta2020"
+         "     colour: per-drug Δ",
+         fontsize=6.0, color=DARK, ha="left", va="bottom")
+# No exemplar-selection note on the figure. An earlier version carried a
+# "top row = 3 largest Δ / bottom row = 3 closest to the median" line here; the
+# caption already states the rule, and repeating it inside the panel is what made
+# the figure look self-justifying. Each panel already prints its own drug id and Δ.
 
 # D seven prediction sources (narrow strip)
 ax = fig.add_subplot(gs[1, 1])
@@ -231,14 +306,26 @@ for k, (lab, col, c) in enumerate(STATES4):
     vp = ax.violinplot(v, positions=[k], showextrema=False, widths=0.7)
     for body in vp["bodies"]:
         body.set_facecolor(c); body.set_alpha(0.35)
-    ax.plot([k - 0.10, k + 0.10], [np.median(v)] * 2, color=DARK, lw=1.6)
-    ax.annotate(f"{np.median(v):.3f}", xy=(k, np.median(v)), xytext=(0, 6),
-                textcoords="offset points", ha="center", fontsize=7)
-    rec(3, "A", lab.replace("\n", " "), float(np.median(v)))
+    med, mean = float(np.median(v)), float(v.mean())
+    ax.plot([k - 0.10, k + 0.10], [med] * 2, color=DARK, lw=1.6)           # median, solid
+    ax.plot([k - 0.13, k + 0.13], [mean] * 2, color="k", lw=1.1, ls="--")   # mean, dashed
+    ax.annotate(f"{mean:.3f}", xy=(k, mean), xytext=(0, 5), textcoords="offset points",
+                ha="center", fontsize=7, color="k",
+                path_effects=[pe.withStroke(linewidth=2.2, foreground="white")])
+    ax.annotate(f"{med:.3f}", xy=(k, med), xytext=(0, -11), textcoords="offset points",
+                ha="center", fontsize=7, color=DARK,
+                path_effects=[pe.withStroke(linewidth=2.2, foreground="white")])
+    rec(3, "A", lab.replace("\n", " ") + " median", med)
+    rec(3, "A", lab.replace("\n", " ") + " mean", mean)
 ax.set(xticks=range(4),
        xticklabels=["beta-tr." + chr(10) + "× beta", "beta-tr." + chr(10) + "× dcic",
                     "dcic-tr." + chr(10) + "× beta", "dcic-tr." + chr(10) + "× dcic"],
-       ylabel="Drug-level cross-gene Pearson", ylim=(-0.03, 0.95))
+       ylabel="Drug-level cross-gene Pearson",
+       # -0.30, not -0.03. Per-drug means go down to -0.1017 / -0.1870 / -0.2659 /
+       # -0.1743 across the four states, so the old floor cut off the whole
+       # negative tail -- the very part that shows a reference change can invert a
+       # drug's score. Floor set from the data with margin, not chosen to fit.
+       ylim=(-0.30, 0.95))
 panel(ax, "A", "Drug-level distributions per state")
 
 # B rank-rank hexbin
@@ -299,27 +386,80 @@ fig = plt.figure(figsize=(W, 8.4))
 gs = GridSpec(2, 2, figure=fig, hspace=0.50, wspace=0.40,
               left=0.135, right=0.985, top=0.955, bottom=0.125)
 
-# A top-k retention + overlap count
+# A top-k retention: observed and within-reference on ONE retention axis
+# The two within-reference curves come from S17 (row-level bootstrap inside a single
+# evaluation matrix). S17 reports them as OVERLAP COUNTS, so they are divided by k here
+# to put all three curves on the same retention scale. Putting counts on a second axis
+# next to a rate on the first invites reading the orange/green curves as "low" when
+# they are in fact far ABOVE the observed one. S17 only covers k <= 204, so those two
+# curves stop there while the observed curve runs to k = 1000.
+# Raw counts are annotated next to the markers so the actual numbers stay readable.
 ax = fig.add_subplot(gs[0, 0])
-ax.plot(topk.k, topk.retention, "o-", color=BLUE, ms=5, label="retention (observed)")
-ax.plot(topk.k, np.clip(topk.chance_expected_retention, 1e-4, None), "--", color=GRAY,
-        label="retention (random k/N)")
-ax.set(xscale="log", xlabel="List size, k", ylabel="Top-k retention", ylim=(0, 1))
-ax2 = ax.twinx()
-ax2.plot(topk.k, topk.overlap, "s-", color=ORANGE, ms=4, label="shared candidates")
-ax2.set_ylim(0, max(topk.overlap) * 1.25)
-ax2.set_ylabel("Shared candidates", color=ORANGE, fontsize=7.5)
-ax2.tick_params(axis="y", labelsize=7, colors=ORANGE)
-ax2.spines["right"].set_visible(True)
-ax.text(0.03, 0.95, "k = 10:" + chr(10) + "3 of 10 shared", transform=ax.transAxes,
-        va="top", fontsize=7.5, color=GRAY)
+_s17 = S17.sort_values("k")
+_k = _s17.k.astype(float)
+_b_mean = _s17.within_beta_mean / _k
+_b_lo = _s17.within_beta_p2_5 / _k
+_b_hi = _s17.within_beta_p97_5 / _k
+_d_mean = _s17.within_dcic_mean / _k
+_d_lo = _s17.within_dcic_p2_5 / _k
+_d_hi = _s17.within_dcic_p97_5 / _k
+
+ax.plot(topk.k, topk.retention, "o-", color=BLUE, ms=5,
+        label="Observed cross-reference (retention)")
+ax.errorbar(_k, _b_mean, yerr=[_b_mean - _b_lo, _b_hi - _b_mean],
+            fmt="o-", color=ORANGE, ms=4, lw=1.2, capsize=2.2, elinewidth=0.9,
+            zorder=2.5, label="Within beta2020 bootstrap pairs")
+ax.errorbar(_k, _d_mean, yerr=[_d_mean - _d_lo, _d_hi - _d_mean],
+            fmt="o-", color=GREEN, ms=4, lw=1.2, capsize=2.2, elinewidth=0.9,
+            zorder=3, label="Within dcic2021 bootstrap pairs")
+ax.set(xscale="log", xlabel="List size, k", ylabel="Top-k retention (fraction of k)",
+       ylim=(0, 1.08), xlim=(7, 2600))
+# Overlap counts are annotated next to the markers. The two within-reference curves
+# nearly coincide at small k, so the beta labels sit above and the dcic labels
+# below. The within-matrix values are means over bootstrap pairs and are fractional
+# (7.93, 17.10, ...); they were formatted with %d, which truncated them to 7, 17, ...
+# and hid that the y-axis is not built on integers. The observed cross-matrix counts
+# ARE integers and are printed as such.
+# Value labels: end points only.
+# An earlier version labelled all 17 points. At this panel width the three series
+# crowd the top quarter and the numbers merged into each other and into the
+# curves -- no offset scheme fixes that, because the problem is density, not
+# collision. What the panel is read for is the LEVEL of each curve and the GAP
+# between observed and within-matrix, so only the last point of each series is
+# labelled. The per-k values live in S17.
+_ol = dict(path_effects=[pe.withStroke(linewidth=2.6, foreground="white")])
+
+# Blue: last observed point at k=1000, which is the right edge of the data, so the
+# label sits to the LEFT of the marker, right-aligned, and BELOW it -- the curve
+# rises steeply into that point, so the space above it belongs to the line.
+_bl = topk.k.iloc[-1]
+ax.annotate("%d" % topk.overlap.iloc[-1], (_bl, topk.retention.iloc[-1]),
+            textcoords="offset points", xytext=(-8, -12), ha="right", va="center",
+            fontsize=6.4, color=BLUE, **_ol)
+
+# Orange and green both stop at k=204, close together in value (0.819 / 0.852) and
+# far above the blue curve. Each label hugs the outside of its OWN curve -- orange
+# just above orange, green just above green -- so neither reads as the other's.
+# The 14pt difference is larger than one line height, which keeps the two strings
+# from touching while each stays visually attached to its line.
+for _col, _pt, _dy in [(GREEN, _s17.within_dcic_mean.iloc[-1], 15),
+                       (ORANGE, _s17.within_beta_mean.iloc[-1], 1)]:
+    _klast = _s17.k.iloc[-1]
+    ax.annotate("%.2f" % _pt, (_klast, _pt / _klast), textcoords="offset points",
+                xytext=(8, _dy), ha="left", va="center",
+                fontsize=6.4, color=_col, **_ol)
+
+ax.text(0.03, 0.05,
+        "End-point labels: observed overlap count (cross-matrix)\n"
+        "and mean overlap count (within-matrix bootstrap pairs).\n"
+        "Per-k values: Supplementary Table S17.",
+        transform=ax.transAxes, va="bottom", fontsize=7.0, color=GRAY, linespacing=1.5)
 h1, l1 = ax.get_legend_handles_labels()
-h2, l2 = ax2.get_legend_handles_labels()
-ax.legend(h1 + h2, l1 + l2, frameon=False, loc="upper center",
-          bbox_to_anchor=(.5, -.20), ncol=3, fontsize=6.8, columnspacing=1.0)
+ax.legend(h1, l1, frameon=False, loc="upper center",
+          bbox_to_anchor=(.5, -.20), ncol=1, fontsize=6.8, columnspacing=1.0)
 for row in topk.itertuples():
     rec(4, "A", f"k={row.k}", row.retention, overlap=int(row.overlap))
-panel(ax, "A", "Top-k retention and overlap")
+panel(ax, "A", "Retention vs within-reference stability")
 
 # B top-10 union rank flow
 ax = fig.add_subplot(gs[0, 1])
@@ -365,7 +505,7 @@ panel(ax, "B", "Top-10 union rank flow")
 
 # C shortlist membership matrix (Global + 3 disease contexts; hallmark shortlists
 # are not part of the package)
-sl = pd.read_csv(r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/figure_source_data/TableS_disease_top10_shortlist.csv")
+sl = pd.read_csv(r"C:/Users/wkr20/WorkBuddy/Claw/gigascience_v5/图源数据/TableS_disease_top10_shortlist.csv")
 g10 = perdrug[perdrug.in_top10_beta][["drug_id", "rank_beta"]].rename(columns={"rank_beta": "Global"})
 SIGS = [("ACEVEDO_LIVER_TUMOR_VS_NORMAL_ADJACENT_TISSUE", "Liver"),
         ("RODRIGUES_THYROID_CARCINOMA_ANAPLASTIC", "Thyroid"),
@@ -402,6 +542,22 @@ cbm.ax.tick_params(labelsize=6)
 innerCD = gs[1, 1].subgridspec(2, 1, height_ratios=[1.25, 1], hspace=0.65)
 innerCh = innerCD[0, 0].subgridspec(1, 3, width_ratios=[1, 1, 0.09], wspace=0.06)
 J2 = J.copy()
+# The "Global" row of J_disease_panels.csv is computed on the 1,399-drug jointly evaluable
+# subset, so it disagrees with panels A/B, which use the full 2,037-drug list
+# (top-10 overlap 3, Spearman 0.5675). Replace it with the full-list values recomputed
+# from the same source as A/B (C_perdrug_stability.csv), so one figure never states two
+# different global values. The per-context rows stay on the 1,399 subset -- that is the
+# only set they were ever computed on -- and are labelled as such.
+_g_tb = set(perdrug.loc[perdrug.in_top10_beta, "drug_id"])
+_g_td = set(perdrug.loc[perdrug.in_top10_dcic, "drug_id"])
+_g_jac = len(_g_tb & _g_td) / len(_g_tb | _g_td)
+_g_row = dict(spearman=spearmanr(perdrug.rank_beta, perdrug.rank_dcic).statistic,
+              top10_jaccard=_g_jac, n_drugs=len(perdrug))
+print("  Fig4D Global (full list): rho=%.4f top10_jaccard=%.4f N=%d shared=%d"
+      % (_g_row["spearman"], _g_jac, _g_row["n_drugs"],
+         round(20 * _g_jac / (1 + _g_jac))))
+J2.loc[J2.panel == "rank_perf", ["spearman", "top10_jaccard", "n_drugs"]] = [
+    _g_row["spearman"], _g_row["top10_jaccard"], _g_row["n_drugs"]]
 J2["label"] = J2.panel.map(CTX)
 J2["shared"] = (20 * J2.top10_jaccard / (1 + J2.top10_jaccard)).round().astype(int)
 J2 = J2.sort_values("spearman", ascending=True).reset_index(drop=True)
@@ -414,7 +570,11 @@ axL.set_yticks(yy)
 SH = {"Liver tumor (Acevedo)": "Liver", "Thyroid ATC (Rodrigues)": "Thyroid",
               "APL (Casorelli)": "APL", "EMT (raw)": "EMT-r", "EMT (z-row)": "EMT-z",
               "MYC targets (raw)": "MYC-r", "MYC targets (z-row)": "MYC-z",
-              "Hypoxia (raw)": "Hyp-r", "Hypoxia (z-row)": "Hyp-z", "Global": "Global"}
+              "Hypoxia (raw)": "Hyp-r", "Hypoxia (z-row)": "Hyp-z",
+              # "Global" is the full 2,037-drug value, identical to the one panels A/B use.
+              # The context rows are the 1,399-drug jointly evaluable subset; that is the
+              # only set they exist for, so N is stated per row rather than once in the title.
+              "Global": "Global (N = 2,037)"}
 axL.set_yticklabels([SH.get(x, x) for x in J2.label], fontsize=6)
 axL.set_xticks(np.arange(-.5, 1, 1), minor=True)
 axL.grid(which="minor", color="white", lw=1)
@@ -442,10 +602,17 @@ cbR = fig.colorbar(imR, cax=axcbR, ticks=[0, 3, 7])
 cbR.ax.tick_params(labelsize=4.5)
 cbR.set_label("top-10 shared", fontsize=5.5, labelpad=1)
 panel(axL, "D", "Context summary")
+# N is stated per row, not once in the title: Global is the full 2,037-drug list (same value
+# as panels A/B), the context rows are the 1,399-drug jointly evaluable subset.
+axL.text(0.0, 1.015, "Global: N = 2,037   |   context rows: N = 1,399",
+         transform=axL.transAxes, fontsize=5.5, color=GRAY, va="bottom", ha="left")
 for i, lab in enumerate(J2.label):
-    rec(4, "D", lab.replace("\n", " "), float(J2.spearman[i]), shared=int(J2.shared[i]))
+    rec(4, "D", lab.replace("\n", " "), float(J2.spearman[i]), shared=int(J2.shared[i]),
+        n=int(J2.n_drugs[i]))
 
 axE = fig.add_subplot(innerCD[1, 0])
+# D labels N per row (Global = 2,037, context rows = 1,399), so E's scatter legend can keep
+# the short names -- a long "Global (N = 2,037)" entry overflows the right edge at ncol=5.
 SHORT = {"Global": "Global", "Liver tumor (Acevedo)": "Liver", "Thyroid ATC (Rodrigues)": "Thyroid",
          "APL (Casorelli)": "APL", "EMT (raw)": "EMT-r", "EMT (z-row)": "EMT-z",
          "MYC targets (raw)": "MYC-r", "MYC targets (z-row)": "MYC-z",
@@ -457,7 +624,9 @@ _handles = [plt.Line2D([], [], marker="o", ls="none", ms=4.5, color=_cmap(i % 10
                        label=SHORT.get(lab, lab)) for i, lab in enumerate(J2.label)]
 axE.legend(handles=_handles, loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=5,
            frameon=False, fontsize=5.4, handletextpad=0.25, columnspacing=0.8)
-axE.set(ylabel="Top-10 shared", xlim=(0.39, 0.66), ylim=(-0.7, 8.0))
+# Global now shares the same y value as the contexts (3), so the y range is set by the
+# context rows only; it is trimmed from the old 8.0 to keep the points filling the panel.
+axE.set(ylabel="Top-10 shared", xlim=(0.39, 0.66), ylim=(-0.7, 5.0))
 axE.text(.03, .97, "context rank Spearman ρ (x) vs shared (y)", transform=axE.transAxes,
          va="top", fontsize=6.2, color=GRAY)
 axE.tick_params(labelsize=6.5)
@@ -549,7 +718,12 @@ panel(ax, "C", "Δ matrix (rows = cell lines, %d drugs)" % matT.shape[1])
 rec(5, "C", "matrix_shape", mat.shape[0], n_cols=int(mat.shape[1]),
     measured_fraction=float(mat.notna().mean().mean()))
 
-# D/E six stacked ridges: per-drug, per-cell, then 4 exemplar cells
+# D/E six stacked ridges: per-drug, per-cell, then 4 exemplar cells.
+# sens/stab are the two cell lines with the largest and smallest mean
+# cross-reference difference delta (beta2020 - dcic2021), among those with >= 20
+# scored drugs. They were previously labelled "most sensitive" / "most stable",
+# which is not supported: nothing here perturbs the cells, so no sensitivity to
+# anything is measured. The labels now state the actual selection rule.
 sens = cc[cc.n >= 20].iloc[:2]["cell"].tolist()
 stab = cc[cc.n >= 20].iloc[-2:]["cell"].tolist()
 innerD = gs[1, 1].subgridspec(6, 1, hspace=0.55)
@@ -557,13 +731,13 @@ XR = (-0.6, 1.0)
 rows = [("per-drug (2,037 drugs)", d.groupby("drug").pearson_delta.mean().dropna().to_numpy(),
          BLUE, "D"),
         ("per-cell (63 cell lines)", cc.delta.to_numpy(), ORANGE, None),
-        (sens[0] + "  (most sensitive)", d[d.cell == sens[0]].pearson_delta.dropna().to_numpy(),
+        (sens[0] + "  (example)", d[d.cell == sens[0]].pearson_delta.dropna().to_numpy(),
          "#5C8DB8", None),
-        (sens[1] + "  (sensitive)", d[d.cell == sens[1]].pearson_delta.dropna().to_numpy(),
+        (sens[1] + "  (example)", d[d.cell == sens[1]].pearson_delta.dropna().to_numpy(),
          "#5C8DB8", None),
-        (stab[0] + "  (less sensitive)", d[d.cell == stab[0]].pearson_delta.dropna().to_numpy(),
+        (stab[0] + "  (example)", d[d.cell == stab[0]].pearson_delta.dropna().to_numpy(),
          ORANGE, None),
-        (stab[1] + "  (most stable)", d[d.cell == stab[1]].pearson_delta.dropna().to_numpy(),
+        (stab[1] + "  (example)", d[d.cell == stab[1]].pearson_delta.dropna().to_numpy(),
          "#E2A176", None)]
 for k, (lab, v, c, letter) in enumerate(rows):
     axe = fig.add_subplot(innerD[k])
@@ -624,10 +798,12 @@ for k, (arm, ref, lab) in enumerate(
     jit = np.random.default_rng(7).uniform(-0.08, 0.08, len(dv))
     ax.scatter(k + jit, dv, s=18, color=BLUE, alpha=0.75)
 ax.axhline(0, color=GRAY, lw=1)
-ax.annotate("difference ≈ 0:\nthe gene-mean baseline\nalready explains raw scores",
-            xy=(1.5, 0.2), ha="center", fontsize=7, color=GRAY)
+ax.annotate("model < baseline\nin all four states\n(−0.49 to −1.07 ×1e-3)",
+            xy=(1.5, 0.18), ha="center", va="top", fontsize=7, color=GRAY,
+            linespacing=1.5,
+            path_effects=[pe.withStroke(linewidth=2.4, foreground="white")])
 ax.set(xticks=range(4), xticklabels=[s[2] for s in STATES],
-       ylabel="Model − baseline (×1e-3 Pearson)", ylim=(-1.4, 1.0))
+       ylabel="Model − baseline (×1e-3 Pearson)", ylim=(-1.4, 0.32))
 panel(ax, "B", "Paired difference view")
 
 # C frozen residualized by-cell distributions (matched layout to A)
@@ -723,9 +899,9 @@ panel(ax, "F", "Interaction: collapse vs rescue")
 save(fig, "Figure6_depmap_mechanism_control")
 
 # ============================================================================ Figure 7
-fig = plt.figure(figsize=(W, 13.2))
+fig = plt.figure(figsize=(W, 15.0))
 gs = GridSpec(4, 2, figure=fig, height_ratios=[1.0, 0.85, 0.75, 1.55],
-              hspace=0.55, wspace=0.42, left=0.135, right=0.985, top=0.945, bottom=0.04)
+              hspace=0.55, wspace=0.42, left=0.135, right=0.985, top=0.945, bottom=0.185)
 
 # A ridgelines: Pearson (left) and Spearman (right), 4 states each
 GT = [("rRR", "RR: RNASeQC → RNASeQC", BLUE), ("rRE", "RE: RNASeQC → RSEM", "#5C8DB8"),
@@ -844,21 +1020,31 @@ SYS_COLOR = {"Brain & CNS": "#6B5B95", "Blood & immune": "#C65C27", "Heart": "#A
              "Kidney & urinary": "#4E79A7", "Reproductive & breast": "#B07AA1",
              "Endocrine": "#D4A017", "Skin & soft tissue": "#A9865B",
              "Vascular & nerve": "#5C7A99", "Other": "#999999"}
-E = S12.copy()
-E["sys"] = E.tissue.map(organ_system)
-E = E.sort_values(["sys", "interaction_pearson"], ascending=[True, False]).reset_index(drop=True)
+E_all = S12.copy()
+E_all["sys"] = E_all.tissue.map(organ_system)
+E_all = E_all.sort_values(["sys", "interaction_pearson"],
+                          ascending=[True, False]).reset_index(drop=True)
+# Main text keeps one representative tissue per organ system (the highest Pearson interaction
+# within that system). All 68 tissues stay in supplementary Table S12 and in the source CSV.
+E = E_all.groupby("sys", sort=False).head(1).reset_index(drop=True)
 cols = ["interaction_pearson", "interaction_spearman", "n_donors", "adv_R", "adv_E"]
-titles = ["Pearson int.", "Spearman int.", "n donors", "adv (R)", "adv (E)"]
-innerE = gs[2:, 1].subgridspec(1, len(cols) + 1, width_ratios=[0.25] + [1] * len(cols), wspace=0.04)
+# R = reference built from the RNASeQC quantification, E = from RSEM
+titles = ["Pearson\nint.", "Spearman\nint.", "n donors",
+          "adv.\nRNASeQC (R)", "adv.\nRSEM (E)"]
+cb_labels = ["interaction", "interaction", "donors", "advantage", "advantage"]
+# two rows inside the F panel: heat map on top, one colour bar per column underneath
+innerE = gs[2:, 1].subgridspec(2, len(cols) + 1, width_ratios=[0.25] + [1] * len(cols),
+                               height_ratios=[1, 0.05], wspace=0.32, hspace=0.34)
 axs_side = fig.add_subplot(innerE[0, 0])
-axs_side.imshow(np.arange(len(E))[:, None], cmap=matplotlib.colors.ListedColormap(
-    [SYS_COLOR[s] for s in E.sys]), aspect="auto")
+axs_side.imshow(np.arange(len(E))[:, None], aspect="auto", cmap=matplotlib.colors.ListedColormap(
+    [SYS_COLOR[s] for s in E.sys]))
 axs_side.set_xticks([]); axs_side.set_yticks([])
 for sp in axs_side.spines.values():
     sp.set_visible(False)
 for k, col in enumerate(cols):
     axk = fig.add_subplot(innerE[0, k + 1])
     vv = E[col].to_numpy()
+    raw = vv.copy()
     if col == "n_donors":
         vv_norm = np.log10(vv)
         imk = axk.imshow(vv_norm[:, None], cmap="Greens", aspect="auto")
@@ -873,19 +1059,40 @@ for k, col in enumerate(cols):
     axk.tick_params(which="minor", length=0)
     for sp in axk.spines.values():
         sp.set_visible(False)
+    # per-column colour bar; the panel is narrow here, so tick labels are vertical
+    caxk = fig.add_subplot(innerE[1, k + 1])
+    cb = fig.colorbar(imk, cax=caxk, orientation="horizontal")
+    lo, hi = float(raw.min()), float(raw.max())
+    if col == "n_donors":
+        tk = np.unique(np.round(np.geomspace(max(lo, 1.0), hi, 3)).astype(int))
+        cb.set_ticks(np.log10(tk))
+        cb.set_ticklabels([str(int(t)) for t in tk])
+    else:
+        nd = 3 if hi < 0.2 else 4
+        cb.set_ticks([0.0, 1.0])
+        cb.set_ticklabels([("%." + str(nd) + "f") % lo, ("%." + str(nd) + "f") % hi])
+    cb.ax.tick_params(labelsize=4.8, length=1.2, pad=1.0, labelrotation=90)
+    cb.set_label(cb_labels[k], fontsize=5.0, labelpad=2.0)
+    cb.outline.set_linewidth(0.4)
 axs_side.set_yticks(range(len(E)))
-axs_side.set_yticklabels(E.tissue.str.slice(0, 30), fontsize=4.2)
+axs_side.set_yticklabels(E.tissue.str.slice(0, 30), fontsize=6.2)
 axs_side.yaxis.tick_left()
-panel(axs_side, "F", "68 tissues × 5 summaries", fs_title=8.5)
-for row in E.itertuples():
+panel(axs_side, "F", "%d representative tissues" % len(E), fs_title=8.5)
+# organ-system legend in the free strip under the panels; the grid columns are untouched
+for _i, _sy in enumerate(dict.fromkeys(E.sys)):
+    _rr, _cc = divmod(_i, 4)
+    _lx = 0.135 + _cc * 0.153
+    _ly = 0.152 - _rr * 0.0215
+    fig.patches.append(mpatches.Rectangle(
+        (_lx, _ly), 0.0050, 0.0125, transform=fig.transFigure,
+        facecolor=SYS_COLOR[_sy], edgecolor="none", zorder=5))
+    fig.text(_lx + 0.0080, _ly + 0.0062, _sy, fontsize=5.4, va="center", ha="left",
+             color=DARK, zorder=5)
+for row in E_all.itertuples():
     rec(7, "F", row.tissue, row.interaction_pearson, n_donors=int(row.n_donors))
 
-# GTEx A-left needs its own axes reference for the panel letter (handled above)
-ax = fig.add_subplot(gs[2:, 0])
-ax.axis("off")
-ax.annotate("E  68 tissues: grouped by organ system,\nsorted by Pearson interaction within group.\n"
-            "All four summary columns are per-tissue medians\n(see supplementary S12).",
-            xy=(0.02, 0.10), xycoords="axes fraction", fontsize=7.5, color=GRAY, va="bottom")
+# The ordering note that used to sit here ("68 tissues: grouped by organ system ...") was
+# placed on the bootstrap panel and collided with the tissue labels; it now lives in the caption.
 save(fig, "Figure7_gtex_reference_matching")
 
 pd.DataFrame(plotdata).to_csv(O / "Figure_summary_values.csv", index=False)
